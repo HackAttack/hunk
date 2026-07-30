@@ -567,6 +567,7 @@ export function dispatchAppCommand(
       continue;
     }
 
+    key.preventDefault();
     command.run(key);
     return command;
   }

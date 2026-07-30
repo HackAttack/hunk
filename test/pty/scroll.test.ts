@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { createPtyHarness, dragMouse } from "./harness";
+import type { Key, Session } from "tuistory";
+import { createPtyHarness, dragMouse, lineIndexOf } from "./harness";
 
 const harness = createPtyHarness();
 
@@ -9,6 +10,25 @@ setDefaultTimeout(20_000);
 afterEach(() => {
   harness.cleanup();
 });
+
+/**
+ * Count how many rows one keypress moved the stream by following the text that
+ * sat on a fixed screen row.
+ */
+async function measureKeyScroll(session: Session, key: Key, anchorRow: number) {
+  const before = (await session.text({ immediate: true })).split("\n");
+  const anchor = before[anchorRow]?.trim() ?? "";
+  expect(anchor.length).toBeGreaterThan(0);
+
+  await session.press(key);
+  await session.waitIdle({ timeout: 400 });
+
+  const after = (await session.text({ immediate: true })).split("\n");
+  const movedTo = after.findIndex((line) => line.trim() === anchor);
+  expect(movedTo).toBeGreaterThanOrEqual(0);
+
+  return anchorRow - movedTo;
+}
 
 describe("PTY scrolling", () => {
   test("a short last file does not trap upward scrolling at the bottom edge", async () => {
@@ -46,6 +66,58 @@ describe("PTY scrolling", () => {
       );
 
       expect(movedUp).toContain("line30 = 130");
+    } finally {
+      session.close();
+    }
+  });
+
+  test("step keys move one row in pager mode, where the scroll box holds focus", async () => {
+    const fixture = harness.createPagerPatchFixture(60);
+    const session = await harness.launchHunkWithFileBackedStdin({
+      stdinFile: fixture.patchFile,
+      args: ["pager"],
+      cols: 140,
+      rows: 24,
+    });
+
+    try {
+      await session.waitForText(/scroll\.ts/, { timeout: 15_000 });
+      await session.waitIdle({ timeout: 300 });
+
+      expect(await measureKeyScroll(session, "j", 12)).toBe(1);
+      expect(await measureKeyScroll(session, "j", 12)).toBe(1);
+      expect(await measureKeyScroll(session, "k", 12)).toBe(-1);
+    } finally {
+      session.close();
+    }
+  });
+
+  test("step keys still move one row after a click in the review stream", async () => {
+    const fixture = harness.createPinnedHeaderRepoFixture();
+    const session = await harness.launchHunk({
+      args: ["show", "HEAD"],
+      cwd: fixture.dir,
+      cols: 120,
+      rows: 24,
+    });
+
+    try {
+      const initial = await session.waitForText(/View\s+Navigate\s+Agent\s+Help/, {
+        timeout: 15_000,
+      });
+      await session.waitIdle({ timeout: 300 });
+
+      expect(await measureKeyScroll(session, "j", 12)).toBe(1);
+      expect(await measureKeyScroll(session, "k", 12)).toBe(-1);
+
+      const codeRow = lineIndexOf(initial, "line16 = 16;");
+      expect(codeRow).toBeGreaterThan(0);
+      await session.clickAt(60, codeRow);
+      await session.waitIdle({ timeout: 400 });
+
+      expect(await measureKeyScroll(session, "j", 12)).toBe(1);
+      expect(await measureKeyScroll(session, "j", 12)).toBe(1);
+      expect(await measureKeyScroll(session, "k", 12)).toBe(-1);
     } finally {
       session.close();
     }

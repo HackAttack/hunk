@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { KeyEvent } from "@opentui/core";
+import { KeyEvent, type ParsedKey } from "@opentui/core";
 import {
   buildAppCommands,
   builtinCommandKeyDefaults,
@@ -11,8 +11,8 @@ import {
 import { resolveCommandKeys } from "./keymap";
 
 /** Build a key event with the fields command matching reads. */
-function keyEvent(fields: Partial<KeyEvent>): KeyEvent {
-  return {
+function keyEvent(fields: Partial<ParsedKey>): KeyEvent {
+  return new KeyEvent({
     name: "",
     sequence: "",
     raw: "",
@@ -20,8 +20,11 @@ function keyEvent(fields: Partial<KeyEvent>): KeyEvent {
     meta: false,
     option: false,
     shift: false,
+    number: false,
+    eventType: "press",
+    source: "raw",
     ...fields,
-  } as KeyEvent;
+  });
 }
 
 /** Build the built-in table over recording callbacks, plus the log it writes. */
@@ -67,7 +70,7 @@ function createTestCommands(resolvedKeys?: ResolvedCommandKeys) {
 describe("built-in command chords", () => {
   test("every alias of the scroll shortcuts still dispatches", () => {
     const { commands, ran } = createTestCommands();
-    const press = (fields: Partial<KeyEvent>) =>
+    const press = (fields: Partial<ParsedKey>) =>
       dispatchAppCommand(commands, "review", keyEvent(fields))?.id;
 
     expect(press({ name: "pagedown" })).toBe("hunk.review.pageDown");
@@ -101,7 +104,7 @@ describe("built-in command chords", () => {
 
   test("shifted and unshifted forms stay separate commands", () => {
     const { commands } = createTestCommands();
-    const press = (fields: Partial<KeyEvent>) =>
+    const press = (fields: Partial<ParsedKey>) =>
       dispatchAppCommand(commands, "review", keyEvent(fields))?.id;
 
     expect(press({ name: "g", sequence: "g" })).toBe("hunk.review.jumpToTop");
@@ -119,6 +122,20 @@ describe("built-in command chords", () => {
     dispatchAppCommand(commands, "review", keyEvent({ name: "left" }));
     dispatchAppCommand(commands, "review", keyEvent({ name: "left", shift: true }));
     expect(ran).toEqual(["scrollCodeHorizontally:-1", "scrollCodeHorizontally:-8"]);
+  });
+
+  test("a matched key is claimed so focused OpenTUI widgets cannot scroll it too", () => {
+    const { commands } = createTestCommands();
+    const press = (fields: Partial<ParsedKey>) => {
+      const key = keyEvent(fields);
+      dispatchAppCommand(commands, "review", key);
+      return key.defaultPrevented;
+    };
+
+    expect(press({ name: "j", sequence: "j" })).toBe(true);
+    expect(press({ name: "up" })).toBe(true);
+    expect(press({ name: "pagedown" })).toBe(true);
+    expect(press({ name: "f9" })).toBe(false);
   });
 
   test("key labels are derived from the chords the command answers to", () => {
@@ -158,7 +175,7 @@ describe("built-in commands under user keybindings", () => {
       userBindings: { "hunk.review.focusFilter": ["f", "/"] },
     });
     const { commands } = createTestCommands(keys);
-    const press = (fields: Partial<KeyEvent>) =>
+    const press = (fields: Partial<ParsedKey>) =>
       dispatchAppCommand(commands, "review", keyEvent(fields))?.id;
 
     expect(press({ name: "f", sequence: "f" })).toBe("hunk.review.focusFilter");
