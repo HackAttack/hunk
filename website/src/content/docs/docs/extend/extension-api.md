@@ -93,7 +93,7 @@ Declared keys are defaults: users remap commands by id in their `[keybindings]` 
 
 Registered commands are also listed in the menu bar's **Extensions** menu under their `title`, showing whichever key they currently answer to — a command with no binding is still reachable with the mouse.
 
-The handler fires when the key is pressed outside modal UI (dialogs, menus, and focused text inputs own their keys; pager mode does not dispatch extension commands). It receives the standard context plus:
+The handler fires when the key is pressed outside modal UI (dialogs, menus, and focused text inputs own their keys). It receives the standard context plus:
 
 - `ctx.sidebars.open(viewId)` / `close(viewId)` / `toggle(viewId)` / `isOpen(viewId)` — a bare id names your own view, `"files"` the built-in file navigation, `"<extensionId>:<viewId>"` any registered view. Opening also reveals a hidden sidebar area.
 - `ctx.fileViews.select(viewId)` / `toggle(viewId)` / `isActive(viewId)` — controls a matching [file preview](/docs/extend/file-previews/) for the current file; `select(null)` restores raw diff.

@@ -1029,6 +1029,7 @@ export function resolveConfiguredCliInput(
     agentContext: input.options.agentContext,
     pager: input.options.pager ?? false,
     experimental: false,
+    ...(input.options.pager ? { menuBar: false } : {}),
   };
 
   /** Fold one parsed config layer's themes into the resolved list and notice set. */

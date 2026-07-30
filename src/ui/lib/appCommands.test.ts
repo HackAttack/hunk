@@ -73,7 +73,7 @@ describe("built-in command chords", () => {
   test("every alias of the scroll shortcuts still dispatches", () => {
     const { commands, ran } = createTestCommands();
     const press = (fields: Partial<ParsedKey>) =>
-      dispatchAppCommand(commands, "review", keyEvent(fields))?.id;
+      dispatchAppCommand(commands, keyEvent(fields))?.id;
 
     expect(press({ name: "pagedown" })).toBe("hunk.review.pageDown");
     expect(press({ name: "space" })).toBe("hunk.review.pageDown");
@@ -107,7 +107,7 @@ describe("built-in command chords", () => {
   test("shifted and unshifted forms stay separate commands", () => {
     const { commands } = createTestCommands();
     const press = (fields: Partial<ParsedKey>) =>
-      dispatchAppCommand(commands, "review", keyEvent(fields))?.id;
+      dispatchAppCommand(commands, keyEvent(fields))?.id;
 
     expect(press({ name: "g", sequence: "g" })).toBe("hunk.review.jumpToTop");
     expect(press({ name: "g", sequence: "G", shift: true })).toBe("hunk.review.jumpToBottom");
@@ -121,8 +121,8 @@ describe("built-in command chords", () => {
   test("the shifted arrow scrolls further through the same command", () => {
     const { commands, ran } = createTestCommands();
 
-    dispatchAppCommand(commands, "review", keyEvent({ name: "left" }));
-    dispatchAppCommand(commands, "review", keyEvent({ name: "left", shift: true }));
+    dispatchAppCommand(commands, keyEvent({ name: "left" }));
+    dispatchAppCommand(commands, keyEvent({ name: "left", shift: true }));
     expect(ran).toEqual(["scrollCodeHorizontally:-1", "scrollCodeHorizontally:-8"]);
   });
 
@@ -130,7 +130,7 @@ describe("built-in command chords", () => {
     const { commands } = createTestCommands();
     const press = (fields: Partial<ParsedKey>) => {
       const key = keyEvent(fields);
-      dispatchAppCommand(commands, "review", key);
+      dispatchAppCommand(commands, key);
       return key.defaultPrevented;
     };
 
@@ -158,12 +158,10 @@ describe("built-in commands under user keybindings", () => {
     });
     const { commands, ran } = createTestCommands(keys);
 
-    expect(dispatchAppCommand(commands, "review", keyEvent({ name: "x", ctrl: true }))?.id).toBe(
+    expect(dispatchAppCommand(commands, keyEvent({ name: "x", ctrl: true }))?.id).toBe(
       "hunk.app.quit",
     );
-    expect(
-      dispatchAppCommand(commands, "review", keyEvent({ name: "q", sequence: "q" })),
-    ).toBeUndefined();
+    expect(dispatchAppCommand(commands, keyEvent({ name: "q", sequence: "q" }))).toBeUndefined();
     expect(ran).toEqual(["requestQuit"]);
     expect(commands.find((command) => command.id === "hunk.app.quit")?.keyLabels).toEqual([
       "Ctrl+X",
@@ -178,7 +176,7 @@ describe("built-in commands under user keybindings", () => {
     });
     const { commands } = createTestCommands(keys);
     const press = (fields: Partial<ParsedKey>) =>
-      dispatchAppCommand(commands, "review", keyEvent(fields))?.id;
+      dispatchAppCommand(commands, keyEvent(fields))?.id;
 
     expect(press({ name: "f", sequence: "f" })).toBe("hunk.review.focusFilter");
     expect(press({ name: "/", sequence: "/" })).toBe("hunk.review.focusFilter");
@@ -194,9 +192,7 @@ describe("built-in commands under user keybindings", () => {
     });
     const { commands } = createTestCommands(keys);
 
-    expect(
-      dispatchAppCommand(commands, "review", keyEvent({ name: "q", sequence: "q" })),
-    ).toBeUndefined();
+    expect(dispatchAppCommand(commands, keyEvent({ name: "q", sequence: "q" }))).toBeUndefined();
     expect(commands.find((command) => command.id === "hunk.app.quit")?.keyLabels).toEqual([]);
   });
 });
@@ -246,7 +242,7 @@ describe("commands that ship unbound", () => {
     });
     const { commands, ran } = createTestCommands(keys);
 
-    expect(dispatchAppCommand(commands, "review", keyEvent({ name: "n", ctrl: true }))?.id).toBe(
+    expect(dispatchAppCommand(commands, keyEvent({ name: "n", ctrl: true }))?.id).toBe(
       "hunk.review.nextAnnotatedFile",
     );
     expect(ran).toEqual(["moveToAnnotatedFile:1"]);

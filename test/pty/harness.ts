@@ -692,6 +692,33 @@ export function createPtyHarness() {
     return { dir, patchFile };
   }
 
+  /**
+   * Capture a multi-file working-tree diff as a patch file.
+   *
+   * Pager tests feed this on stdin to get the same review `git diff | hunk
+   * pager` produces, with a leading file tall enough that the second one only
+   * becomes visible once the reader navigates to it.
+   */
+  function createMultiFilePagerPatchFixture() {
+    const fixture = createGitRepoFixture([
+      {
+        path: "first.ts",
+        before: `${createNumberedExportLines(1, 40)}\n`,
+        after: `${createNumberedExportLines(1, 40, 100)}\n`,
+      },
+      {
+        path: "second.ts",
+        before: "export const secondValue = 1;\n",
+        after: "export const secondValue = 2;\n",
+      },
+    ]);
+    // Kept outside the repo so capturing it cannot change what the diff shows.
+    const patchFile = join(makeTempDir("hunk-tuistory-pager-patch-"), "working-tree.patch");
+    writeText(patchFile, runGit(["diff"], fixture.dir));
+
+    return { ...fixture, patchFile };
+  }
+
   /** Build the configured Hunk command so PTY tests can reuse it inside shell pipelines. */
   function buildHunkCommand(args: string[]) {
     if (explicitHunkExecutable) {
@@ -849,6 +876,7 @@ export function createPtyHarness() {
     createRepoExtensionFixture,
     createLinkedWorktreeWatchFixture,
     createLongWrapFilePair,
+    createMultiFilePagerPatchFixture,
     createMultiHunkFilePair,
     createPagerPatchFixture,
     createPinnedHeaderRepoFixture,

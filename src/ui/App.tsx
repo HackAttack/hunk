@@ -670,15 +670,11 @@ export function App({
   // One dialog queue per review: every extension's `ctx.dialogs` is minted from
   // it, so questions from different extensions share one FIFO and one modal.
   const [extensionDialogQueue] = useState(createExtensionDialogQueue);
-  const queuedExtensionDialog = useSyncExternalStore(
+  const extensionDialog = useSyncExternalStore(
     extensionDialogQueue.subscribe,
     extensionDialogQueue.current,
     extensionDialogQueue.current,
   );
-  // Pager mode never dispatches extension commands, so nothing can fill the
-  // queue there; resolving it to null anyway keeps the modal's rendering and
-  // its key ownership describing the same thing.
-  const extensionDialog = pagerMode ? null : queuedExtensionDialog;
   const [extensionDialogSelectedIndex, setExtensionDialogSelectedIndex] = useState(0);
   const [extensionDialogInputValue, setExtensionDialogInputValue] = useState("");
   const extensionDialogId = extensionDialog?.id ?? null;
@@ -1888,7 +1884,6 @@ export function App({
     moveMenuItem,
     moveThemeSelector,
     openMenu,
-    pagerMode,
     saveConfigPromptOpen,
     saveViewPreferencesAndQuit,
     discardViewPreferencesAndQuit,
@@ -1969,7 +1964,7 @@ export function App({
   // plus its divider. Keep this in lockstep with the body container's
   // paddingLeft and the sidebar render branch below.
   const diffPaneScreenLeft = bodyPadding / 2 + sidebarLayout.leftWidth;
-  const diffPaneScreenTop = pagerMode || !showMenuBar ? 0 : 1;
+  const diffPaneScreenTop = showMenuBar ? 1 : 0;
 
   /** Render one open sidebar view at its planned width. */
   const renderSidebarPane = (pane: SidebarPanePlan) => {
@@ -2016,7 +2011,7 @@ export function App({
         backgroundColor: activeTheme.background,
       }}
     >
-      {!pagerMode && showMenuBar ? (
+      {showMenuBar ? (
         <MenuBar
           activeMenuId={activeMenuId}
           menuSpecs={menuSpecs}
@@ -2094,7 +2089,7 @@ export function App({
           pagerMode={pagerMode}
           screenLeft={diffPaneScreenLeft}
           screenTop={diffPaneScreenTop}
-          showTopChrome={showMenuBar && !pagerMode}
+          showTopChrome={showMenuBar}
           headerLabelWidth={diffHeaderLabelWidth}
           headerStatsWidth={diffHeaderStatsWidth}
           layout={resolvedLayout}
@@ -2169,7 +2164,7 @@ export function App({
         })}
       </box>
 
-      {!pagerMode && extensionToast ? (
+      {extensionToast ? (
         <ExtensionToast
           notification={extensionToast}
           terminalWidth={terminal.width}
@@ -2177,10 +2172,9 @@ export function App({
         />
       ) : null}
 
-      {!pagerMode &&
-      (focusArea === "filter" ||
-        Boolean(review.filter) ||
-        Boolean(sessionNoticeText ?? transientNoticeText ?? noticeText)) ? (
+      {focusArea === "filter" ||
+      Boolean(review.filter) ||
+      Boolean(sessionNoticeText ?? transientNoticeText ?? noticeText) ? (
         <StatusBar
           filter={review.filter}
           filterFocused={focusArea === "filter"}
@@ -2193,7 +2187,7 @@ export function App({
         />
       ) : null}
 
-      {!pagerMode && activeMenuId && activeMenuSpec ? (
+      {activeMenuId && activeMenuSpec ? (
         <Suspense fallback={null}>
           <LazyMenuDropdown
             activeMenuId={activeMenuId}
@@ -2213,7 +2207,7 @@ export function App({
         </Suspense>
       ) : null}
 
-      {!pagerMode && showAgentSkill ? (
+      {showAgentSkill ? (
         <Suspense fallback={null}>
           <LazyAgentSkillDialog
             copySupported={renderer.isOsc52Supported?.() ?? false}
@@ -2226,7 +2220,7 @@ export function App({
         </Suspense>
       ) : null}
 
-      {!pagerMode && showHelp ? (
+      {showHelp ? (
         <Suspense fallback={null}>
           <LazyHelpDialog
             commands={appCommands}
@@ -2253,7 +2247,7 @@ export function App({
         />
       ) : null}
 
-      {!pagerMode && saveConfigPromptOpen ? (
+      {saveConfigPromptOpen ? (
         <ConfirmDialog
           actions={[
             { keyLabel: "enter/s", label: "save", run: saveViewPreferencesAndQuit },
@@ -2330,7 +2324,7 @@ export function App({
         </ConfirmDialog>
       ) : null}
 
-      {!pagerMode && themeSelectorState.open ? (
+      {themeSelectorState.open ? (
         <Suspense fallback={null}>
           <LazyThemeSelectorDialog
             items={themeSelectorItems}

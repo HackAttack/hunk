@@ -882,9 +882,8 @@ key would have done — so a command with no `key`, or one whose chord was
 refused, is still reachable with the mouse.
 
 The handler fires when the key is pressed outside modal UI — dialogs, menus,
-and focused text inputs own their keys first, and pager mode does not dispatch
-extension commands. It receives the standard context plus `ctx.sidebars`, the
-controls for opening sidebar views:
+and focused text inputs own their keys first. It receives the standard context
+plus `ctx.sidebars`, the controls for opening sidebar views:
 
 - `ctx.sidebars.open(viewId)` / `close(viewId)` / `toggle(viewId)` — a bare id
   names your own extension's view, `"files"` names the built-in file

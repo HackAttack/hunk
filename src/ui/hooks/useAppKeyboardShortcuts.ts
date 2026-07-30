@@ -35,7 +35,6 @@ export interface UseAppKeyboardShortcutsOptions {
   moveMenuItem: (delta: number) => void;
   moveThemeSelector: (delta: number) => void;
   openMenu: (menuId: MenuId) => void;
-  pagerMode: boolean;
   saveConfigPromptOpen: boolean;
   saveViewPreferencesAndQuit: () => void;
   discardViewPreferencesAndQuit: () => void;
@@ -81,7 +80,6 @@ export function useAppKeyboardShortcuts({
   moveMenuItem,
   moveThemeSelector,
   openMenu,
-  pagerMode,
   saveConfigPromptOpen,
   saveViewPreferencesAndQuit,
   discardViewPreferencesAndQuit,
@@ -97,7 +95,6 @@ export function useAppKeyboardShortcuts({
   const activeMenuIdRef = useRef(activeMenuId);
   const commandsRef = useRef(commands);
   const focusAreaRef = useRef(focusArea);
-  const pagerModeRef = useRef(pagerMode);
   const showAgentSkillRef = useRef(showAgentSkill);
   const showHelpRef = useRef(showHelp);
   const saveConfigPromptOpenRef = useRef(saveConfigPromptOpen);
@@ -113,7 +110,6 @@ export function useAppKeyboardShortcuts({
   activeMenuIdRef.current = activeMenuId;
   commandsRef.current = commands;
   focusAreaRef.current = focusArea;
-  pagerModeRef.current = pagerMode;
   showAgentSkillRef.current = showAgentSkill;
   showHelpRef.current = showHelp;
   saveConfigPromptOpenRef.current = saveConfigPromptOpen;
@@ -132,10 +128,6 @@ export function useAppKeyboardShortcuts({
   const handleMenuToggleShortcut = (key: KeyEvent) => {
     if (key.name !== "f10") {
       return false;
-    }
-
-    if (pagerModeRef.current) {
-      return true;
     }
 
     if (activeMenuIdRef.current) {
@@ -432,11 +424,7 @@ export function useAppKeyboardShortcuts({
       return;
     }
 
-    const matched = dispatchAppCommand(
-      commandsRef.current,
-      pagerModeRef.current ? "pager" : "review",
-      key,
-    );
+    const matched = dispatchAppCommand(commandsRef.current, key);
     if (matched?.closesMenu) {
       closeMenu();
     }

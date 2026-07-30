@@ -3683,6 +3683,35 @@ describe("App interactions", () => {
     }
   });
 
+  test("pager mode quits on q even after changing a view preference", async () => {
+    const quit = mock(() => undefined);
+    const setup = await testRender(
+      <AppHost bootstrap={createBootstrap("auto", true)} onQuit={quit} />,
+      { width: 220, height: 24 },
+    );
+
+    try {
+      await flush(setup);
+      await act(async () => {
+        await setup.mockInput.typeText("w");
+      });
+      await flush(setup);
+
+      await act(async () => {
+        await setup.mockInput.typeText("q");
+      });
+      await flush(setup);
+
+      // A pager's q is an exit, not the start of a conversation about config.
+      expect(setup.captureCharFrame()).not.toContain("Save view preferences?");
+      expect(quit).toHaveBeenCalledTimes(1);
+    } finally {
+      await act(async () => {
+        setup.renderer.destroy();
+      });
+    }
+  });
+
   test("q routes through the provided onQuit handler in regular and pager modes", async () => {
     const regularQuit = mock(() => undefined);
     const regularSetup = await testRender(

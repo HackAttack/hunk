@@ -911,7 +911,7 @@ export function DiffPane({
         return null;
       }
 
-      const reviewPaneTopChromeRows = pagerMode ? 0 : 2;
+      const reviewPaneTopChromeRows = renderTopChrome ? 2 : 0;
       const pinnedHeaderHeight = pinnedHeaderFileId ? 1 : 0;
       const paneY = Math.floor(event.y - screenTop);
       const pinnedHeaderY = reviewPaneTopChromeRows;
@@ -943,8 +943,8 @@ export function DiffPane({
       copyDecorations,
       diffContentWidth,
       fileSectionLayouts,
-      pagerMode,
       pinnedHeaderFileId,
+      renderTopChrome,
       screenLeft,
       screenTop,
       scrollRef,
