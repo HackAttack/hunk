@@ -441,7 +441,7 @@ function renderCliHelp() {
     "",
     "Commands:",
     "  hunk diff [target] [-- <pathspec...>]   review working tree changes or compare against a target",
-    "  hunk diff <commit> <commit>             compare two commits (same as A..B)",
+    "  hunk diff <commit> <commit>             compare two commits, like `git diff A B`",
     "  hunk diff --staged [-- <pathspec...>]   review staged changes",
     "  hunk diff <left> <right>                compare two concrete files",
     "  hunk show [target] [-- <pathspec...>]   review the last commit or a given target",
@@ -753,13 +753,19 @@ async function parseDiffCommand(tokens: string[], argv: string[]): Promise<Parse
       };
     }
 
-    // Git reads `diff A B` as `diff A..B`, so Hunk should too. A target that already
-    // spells a range keeps its trailing token as a pathspec, and so does a second token
-    // that exists on disk, since that is the shape `diff <rev> <path>` relies on.
-    if (!isRangeExpression(left) && (normalizedPathspecs !== undefined || !existsSync(right))) {
+    // Git reads `diff A B` as the two-commit review `diff A..B`, so Hunk does too.
+    // The endpoints stay unjoined because `A..B` is Git spelling: jj and Sapling
+    // read `..` as a revset over the commits between them, so each backend has to
+    // name these two revisions in its own syntax.
+    //
+    // Whether the second token exists on disk deliberately does not enter into
+    // it. That answer depends on the working directory rather than the argument,
+    // and it read deleted files and globs as revisions. A pathspec needs `--`,
+    // unless a side already spells a range and so cannot be half of a new one.
+    if (!isRangeExpression(left) && !isRangeExpression(right)) {
       return {
         kind: "vcs",
-        range: `${left}..${right}`,
+        rangeEndpoints: { from: left, to: right },
         staged,
         pathspecs: normalizedPathspecs,
         options,
