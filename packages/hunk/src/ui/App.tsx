@@ -18,7 +18,10 @@ import type { PersistedViewPreferences } from "../core/run/config";
 import { STATUS_COMMAND_NAMES } from "../core/run/statusCommandCatalog";
 import { HISTORY_COMMAND_NAMES } from "../core/run/historyCommandCatalog";
 import { DOCUMENT_COMMAND_NAMES } from "../core/run/documentCommandCatalog";
-import type { ExtensionReviewReloadResult } from "../extension-api/types";
+import type {
+  ExtensionCanonicalResolvedLayout,
+  ExtensionReviewReloadResult,
+} from "../extension-api/types";
 import { experimentalFeatureEnabled, resolveExperimentalDiffFiles } from "../core/run/experimental";
 import { DEFAULT_FILE_GAP, DEFAULT_HUNK_GAP } from "../core/run/reviewGap";
 import { DEFAULT_TAB_WIDTH } from "../core/run/tabWidth";
@@ -421,11 +424,14 @@ export function App({
     () => (cursorLine === "off" ? null : review.getLineCursor()),
     [cursorLine, review.getLineCursor],
   );
+  const resolvedLayoutRef = useRef<ExtensionCanonicalResolvedLayout>("unified");
+  const getResolvedLayout = useCallback(() => resolvedLayoutRef.current, []);
   const extensionRuntime = useExtensionRuntimeBridge({
     extensions,
     files: filteredFiles,
     getActiveLineCursor: getActiveExtensionLineCursor,
     getSelection: review.getSelection,
+    getLayout: getResolvedLayout,
     reviewGeneration: bootstrap,
     reviewProducer,
     createPresentationControls: presentationScope.createControls,
@@ -832,6 +838,7 @@ export function App({
     diffContentWidth,
     bootstrap.input.options.autoSplitMinWidth,
   );
+  resolvedLayoutRef.current = resolvedLayout;
 
   const reviewNotes = useMemo(
     () => projectExtensionReviewNotes(review.store.getSnapshot()),

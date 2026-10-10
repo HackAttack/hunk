@@ -87,6 +87,7 @@ export default function (hunk: HunkExtensionAPI) {
     file: null,
     hunkIndex: null,
     currentLine: null,
+    layout: "unified",
   };
   hunk.log(noSelection.file === null ? "nothing selected" : noSelection.file.path);
   hunk.log(noSelection.currentLine?.side ?? "no current line");

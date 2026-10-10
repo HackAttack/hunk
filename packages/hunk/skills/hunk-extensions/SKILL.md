@@ -120,7 +120,7 @@ for all user extensions. Bundled capabilities use separate host-owned selection 
 | Reload after an external agent changes reviewed inputs   | `ctx.review.requestReload()` in an event                      |
 | Read user-supplied settings                              | `hunk.config` (`[extension.<id>]` table)                      |
 | Snapshot stable files and every saved review note        | `ctx.review.snapshot()` in a command                          |
-| Branch on the API generation (currently `31`)            | `hunk.apiVersion`                                             |
+| Branch on the API generation (currently `32`)            | `hunk.apiVersion`                                             |
 
 Registration is only valid while the factory runs — Hunk seals the API object
 afterwards.

@@ -1425,6 +1425,7 @@ end
     createCrossFileHunkNavigationRepoFixture,
     createDeletionOnlyFilePair,
     createElixirHeredocRepoFixture,
+    createGitRepoFixture,
     createIsolatedConfigHome,
     createRepoExtensionFixture,
     createLinkedWorktreeWatchFixture,
