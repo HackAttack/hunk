@@ -11,6 +11,62 @@ import {
 describe("measureDiffSectionGeometry", () => {
   const theme = resolveTheme("github-dark-default", null);
 
+  test("omits notes owned by scoped-out hunks and restores them when the scope clears", () => {
+    const before = Array.from({ length: 40 }, (_, index) => `line ${index + 1}\n`).join("");
+    const after = before.replace("line 5\n", "changed 5\n").replace("line 35\n", "changed 35\n");
+    const file = createTestDiffFile({ before, after });
+    expect(file.metadata.hunks).toHaveLength(2);
+    const notes = [5, 35].map((line) =>
+      createVisibleAgentNote(file.metadata.hunks, {
+        id: `note-${line}`,
+        annotation: { newRange: [line, line], summary: `Note ${line}` },
+      }),
+    );
+    for (const layout of ["split", "unified"] as const) {
+      const scoped = measureDiffSectionGeometry(
+        file,
+        layout,
+        true,
+        theme,
+        notes,
+        120,
+        true,
+        false,
+        undefined,
+        undefined,
+        false,
+        4,
+        0,
+        new Set([1]),
+      );
+      const scopedNotes = scoped.plannedRows.filter((row) => row.kind === "inline-note");
+      expect(scopedNotes.map((row) => row.annotationId)).toEqual(["note-35"]);
+      expect(scoped.hunkBounds.has(0)).toBe(false);
+      expect(scoped.hunkBounds.has(1)).toBe(true);
+      expect(scoped.plannedRows.map((row) => row.key)).toEqual(
+        scoped.rowBounds.map((row) => row.key),
+      );
+
+      const restored = measureDiffSectionGeometry(
+        file,
+        layout,
+        true,
+        theme,
+        notes,
+        120,
+        true,
+        false,
+      );
+      expect(
+        restored.plannedRows
+          .filter((row) => row.kind === "inline-note")
+          .map((row) => row.annotationId),
+      ).toEqual(["note-5", "note-35"]);
+      expect(restored.hunkBounds.has(0)).toBe(true);
+      expect(restored.hunkBounds.has(1)).toBe(true);
+    }
+  });
+
   test("measures split and unified layouts from the render plan", () => {
     const file = createTestDiffFile();
 

@@ -637,6 +637,80 @@ describe("PTY extensions", () => {
     }
   });
 
+  test("presentation scopes render sparse hunks, keep file navigation visible, and restore the review", async () => {
+    const configHome = harness.createIsolatedConfigHome();
+    const before = Array.from({ length: 32 }, (_, index) => `scope line ${index + 1}\n`).join("");
+    const after = before
+      .replace("scope line 5\n", "SCOPE_FIRST_CHANGE\n")
+      .replace("scope line 25\n", "SCOPE_LAST_CHANGE\n");
+    const fixture = harness.createRepoExtensionFixture(
+      `
+export default function (hunk) {
+  hunk.registerCommand({ id: "focus", title: "Focus last hunk", key: "f7" }, (ctx) => {
+    const review = ctx.review.snapshot();
+    const file = review?.files[0];
+    if (file) ctx.review.setPresentationScope({
+      generation: review.generation,
+      files: [{ fileId: file.runtimeId, hunkIndexes: [1] }],
+    });
+  });
+  hunk.registerCommand({ id: "select", title: "Select scoped file", key: "f8" }, (ctx) => {
+    const file = ctx.review.snapshot()?.files[0];
+    if (file) ctx.navigation.selectFile(file.runtimeId);
+    ctx.notify("SCOPED_FILE_SELECTED");
+  });
+  hunk.registerCommand({ id: "clear", title: "Clear focus", key: "f9" }, (ctx) => {
+    ctx.review.clearPresentationScope();
+    const file = ctx.review.snapshot()?.files[0];
+    if (file) ctx.navigation.selectFile(file.runtimeId);
+  });
+}
+`,
+      "fixture.ts",
+      [{ path: "scope.ts", before, after }],
+    );
+    const session = await harness.launchHunk({
+      args: [
+        "diff",
+        "--mode",
+        "unified",
+        "--extension",
+        join(fixture.dir, ".hunk", "extensions", "fixture.ts"),
+      ],
+      cwd: fixture.dir,
+      cols: 140,
+      rows: 40,
+      env: { XDG_CONFIG_HOME: configHome },
+    });
+    try {
+      await harness.waitForSnapshot(session, (text) => text.includes("SCOPE_FIRST_CHANGE"), 20_000);
+      await harness.ensureKeyboardIsLive(session);
+      const scoped = await harness.pressAndWaitForSnapshot(
+        session,
+        "f7",
+        (text) => text.includes("SCOPE_LAST_CHANGE") && !text.includes("SCOPE_FIRST_CHANGE"),
+        20_000,
+      );
+      expect(scoped).not.toContain("SCOPE_FIRST_CHANGE");
+      const selected = await harness.pressAndWaitForSnapshot(
+        session,
+        "f8",
+        (text) => text.includes("SCOPED_FILE_SELECTED") && text.includes("SCOPE_LAST_CHANGE"),
+        20_000,
+      );
+      expect(selected).not.toContain("SCOPE_FIRST_CHANGE");
+      const restored = await harness.pressAndWaitForSnapshot(
+        session,
+        "f9",
+        (text) => text.includes("SCOPE_FIRST_CHANGE") && text.includes("SCOPE_LAST_CHANGE"),
+        20_000,
+      );
+      expect(restored).toContain("SCOPE_FIRST_CHANGE");
+    } finally {
+      session.close();
+    }
+  });
+
   test("a command key opens an extension sidebar beside the built-in pane", async () => {
     const configHome = harness.createIsolatedConfigHome();
     const fixture = harness.createRepoExtensionFixture(SIDEBAR_EXTENSION_SOURCE);

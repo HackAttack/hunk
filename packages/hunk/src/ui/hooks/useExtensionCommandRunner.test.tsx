@@ -26,7 +26,11 @@ const keyboardModes = {} as ExtensionKeyboardModeControls;
 const highlights = {} as ExtensionLineHighlightControls;
 const navigation = {} as ExtensionReviewNavigation;
 const panes = {} as ExtensionPaneControls;
-const review = {} as ExtensionReviewControls;
+const review: ExtensionReviewControls = {
+  snapshot: () => null,
+  setPresentationScope: () => false,
+  clearPresentationScope: () => undefined,
+};
 const workspace = {} as ExtensionWorkspace;
 const statusLine = {} as ExtensionStatusLineControls;
 const prompts = {} as ExtensionPromptControls;
@@ -40,9 +44,11 @@ const selection = Object.freeze({
 /** Mount the command runner and expose its stable invocation callback. */
 async function renderRunner({
   createPanes = () => panes,
+  createReview = () => review,
   extensions = createEmptyExtensionLoadResult("/repo"),
 }: {
   createPanes?: () => ExtensionPaneControls;
+  createReview?: () => ExtensionReviewControls;
   extensions?: ReturnType<typeof createEmptyExtensionLoadResult>;
 } = {}) {
   let run!: (registered: RegisteredCommand) => void;
@@ -57,7 +63,7 @@ async function renderRunner({
       createNavigation: () => navigation,
       createPaneControls: createPanes,
       createPromptControls: () => prompts,
-      createReviewControls: () => review,
+      createReviewControls: createReview,
       createStatusLineControls: () => statusLine,
       createWorkspaceControls: () => workspace,
       extensions,
@@ -160,6 +166,72 @@ describe("useExtensionCommandRunner", () => {
       ]);
     } finally {
       unsubscribe();
+      await act(async () => harness.setup.renderer.destroy());
+    }
+  });
+
+  test("retains leased review controls for setters and late failure cleanup", async () => {
+    let generation = "before";
+    const state: { activeScope: string | null } = { activeScope: null };
+    let reject!: (error: Error) => void;
+    let context!: ExtensionCommandContext;
+    const harness = await renderRunner({
+      createReview: () => {
+        const owner = generation;
+        return {
+          snapshot: () => null,
+          setPresentationScope: (scope) => {
+            if (owner !== generation || scope.generation !== generation) return false;
+            state.activeScope = generation;
+            return true;
+          },
+          clearPresentationScope: () => {
+            if (owner === generation) state.activeScope = null;
+          },
+        };
+      },
+    });
+    const scope = () => ({
+      generation,
+      files: [{ fileId: "alpha", hunkIndexes: [0] }],
+    });
+    try {
+      harness.current()(
+        command((ctx) => {
+          context = ctx;
+          expect(ctx.review.setPresentationScope(scope())).toBe(true);
+          return new Promise<void>((_resolve, rejectPromise) => {
+            reject = rejectPromise;
+          });
+        }),
+      );
+      expect(state.activeScope).toBe("before");
+      context.review.clearPresentationScope();
+      expect(state.activeScope).toBeNull();
+
+      generation = "after";
+      harness.current()(
+        command((ctx) => {
+          expect(ctx.review.setPresentationScope(scope())).toBe(true);
+        }),
+      );
+      expect(state.activeScope).toBe("after");
+      expect(context.review.setPresentationScope(scope())).toBe(false);
+      context.review.clearPresentationScope();
+      expect(state.activeScope).toBe("after");
+      await act(async () => {
+        reject(new Error("old command failed"));
+        await Bun.sleep(0);
+      });
+      expect(state.activeScope).toBe("after");
+
+      harness.current()(
+        command(() => {
+          throw new Error("current command failed");
+        }),
+      );
+      expect(state.activeScope).toBeNull();
+    } finally {
       await act(async () => harness.setup.renderer.destroy());
     }
   });

@@ -5,6 +5,7 @@ import { createTestVcsAppBootstrap } from "../../../../../test/helpers/app-boots
 import { createTestDiffFile } from "../../../../../test/helpers/diff-helpers";
 import { createTestReviewState } from "../../../../../test/helpers/review-store-helpers";
 import type { AppBootstrap } from "../../core/bootstrap";
+import type { ExtensionReviewPresentationControls } from "../../extension-api/types";
 import type { DiffFile } from "../../core/changeset/model";
 import { createEmptyExtensionLoadResult, type ExtensionLoadResult } from "../../extensions/types";
 import type { AppCommand } from "../lib/appCommands";
@@ -36,7 +37,11 @@ function createTestCommand(run: () => void): AppCommand {
 }
 
 /** Mount the runtime bridge with mutable registry, review, and selection facts. */
-async function renderRuntime(initialFacts: RuntimeFacts, strict = false) {
+async function renderRuntime(
+  initialFacts: RuntimeFacts,
+  strict = false,
+  createPresentationControls?: (extensionId: string) => ExtensionReviewPresentationControls,
+) {
   let runtime!: ExtensionRuntimeBridge;
   let updateFacts!: (update: Partial<RuntimeFacts>) => void;
   const navigationCalls: string[] = [];
@@ -58,6 +63,7 @@ async function renderRuntime(initialFacts: RuntimeFacts, strict = false) {
         hunkIndex: facts.selectedHunkIndex,
       }),
       reviewGeneration: facts.reviewGeneration,
+      createPresentationControls,
       reviewProducer: {
         getPositionedReviewState: () => ({
           generation: facts.reviewGeneration.changeset.id,
@@ -122,6 +128,53 @@ async function destroy(setup: Awaited<ReturnType<typeof testRender>>) {
 }
 
 describe("useExtensionRuntimeBridge", () => {
+  test("leases presentation mutations to the review generation that minted them", async () => {
+    const extensions = createEmptyExtensionLoadResult("/repo");
+    const bootstrap = createBootstrap("runtime:before");
+    let mutations = 0;
+    const harness = await renderRuntime(
+      {
+        extensions,
+        files: bootstrap.changeset.files,
+        reviewGeneration: bootstrap,
+        selectedFileId: "alpha",
+        selectedHunkIndex: 0,
+      },
+      false,
+      () => ({
+        setPresentationScope: () => {
+          mutations++;
+          return true;
+        },
+        clearPresentationScope: () => {
+          mutations++;
+        },
+      }),
+    );
+    try {
+      const old = harness.current().createReviewControls("probe");
+      const scope = {
+        generation: "runtime:before",
+        files: [{ fileId: "alpha", hunkIndexes: [0] }],
+      };
+      expect(old.setPresentationScope(scope)).toBe(true);
+      old.clearPresentationScope();
+      expect(mutations).toBe(2);
+      await act(async () =>
+        harness.updateFacts({ reviewGeneration: createBootstrap("runtime:after") }),
+      );
+      await harness.settle();
+      expect(old.setPresentationScope(scope)).toBe(false);
+      old.clearPresentationScope();
+      expect(mutations).toBe(2);
+      const current = harness.current().createReviewControls("probe");
+      expect(current.setPresentationScope({ ...scope, generation: "runtime:after" })).toBe(true);
+      current.clearPresentationScope();
+      expect(mutations).toBe(4);
+    } finally {
+      await destroy(harness.setup);
+    }
+  });
   test("restores authority after StrictMode replay and revokes it during layout cleanup", async () => {
     const extensions = createEmptyExtensionLoadResult("/repo");
     const bootstrap = createBootstrap("runtime:strict");
@@ -224,7 +277,7 @@ describe("useExtensionRuntimeBridge", () => {
       const commandControls = harness.current().commandControls;
       const predecessorLease = harness.current().createReviewCapabilityLease();
       const predecessorNavigation = harness.current().createNavigation("probe");
-      const predecessorReview = harness.current().createReviewControls();
+      const predecessorReview = harness.current().createReviewControls("probe");
       expect(predecessorReview.snapshot()?.generation).toBe(first.changeset.id);
 
       await act(async () =>
@@ -243,7 +296,7 @@ describe("useExtensionRuntimeBridge", () => {
 
       const successorLease = harness.current().createReviewCapabilityLease();
       const successorNavigation = harness.current().createNavigation("probe");
-      const successorReview = harness.current().createReviewControls();
+      const successorReview = harness.current().createReviewControls("probe");
       expect(successorLease.isLive()).toBe(true);
       expect(successorReview.snapshot()?.generation).toBe(second.changeset.id);
       successorNavigation.selectFile("alpha");

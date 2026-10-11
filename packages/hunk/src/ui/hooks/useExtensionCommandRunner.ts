@@ -60,7 +60,7 @@ export function useExtensionCommandRunner({
   createNavigation: (extensionId: string) => ExtensionReviewNavigation;
   createPaneControls: (extensionId: string) => ExtensionPaneControls;
   createPromptControls: (extensionId: string) => ExtensionPromptControls;
-  createReviewControls: () => ExtensionReviewControls;
+  createReviewControls: (extensionId: string) => ExtensionReviewControls;
   createStatusLineControls: (extensionId: string) => ExtensionStatusLineControls;
   createWorkspaceControls: (extensionId: string) => ExtensionWorkspace;
   extensions?: ExtensionLoadResult;
@@ -68,11 +68,15 @@ export function useExtensionCommandRunner({
 }) {
   return useCallback(
     (registered: RegisteredCommand) => {
+      let review: ExtensionReviewControls | undefined;
       const report = (error: unknown) => {
+        // Cleanup retains the invocation's lease; late failures cannot clear a newer review.
+        review?.clearPresentationScope();
         extensions?.context.notify(commandFailureMessage(registered, error), "warning");
       };
 
       try {
+        review = createReviewControls(registered.extensionId);
         const panes = createPaneControls(registered.extensionId);
         // Build the complete context before invoking the handler; selection is frozen here.
         const context: ExtensionCommandContext = {
@@ -84,7 +88,7 @@ export function useExtensionCommandRunner({
           sidebars: panes,
           fileViews: createFileViewControls(registered.extensionId),
           highlights: createLineHighlightControls(registered.extensionId),
-          review: createReviewControls(),
+          review,
           selection: getSelection(),
           dialogs: createDialogs(registered.extensionId),
           statusLine: createStatusLineControls(registered.extensionId),
