@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import {
   createTestDiffFile,
   createTestSourceFetcher,
@@ -9,9 +9,15 @@ import {
   hasPendingHighlightedDiffs,
   highlightedDiffCacheKey,
   prefetchHighlightedDiff,
+  subscribeToHighlightedDiff,
   waitForHighlightedDiffIdle,
 } from "./useHighlightedDiff";
-import { registerHighlightWorker } from "./worker";
+import { disposeHighlightWorker, registerHighlightWorker } from "./worker";
+
+// Release singleton worker doubles so later test files start from a real worker.
+afterAll(() => {
+  disposeHighlightWorker();
+});
 
 /** Build one file large enough to qualify for worker highlighting. */
 function createLargeHighlightTestFile(id: string) {
@@ -173,6 +179,121 @@ describe("highlighted diff cache", () => {
     const second = await prefetchHighlightedDiff({ file, offloadLargeDiff: true, theme });
     expect(second.retryable).toBe(true);
     expect(secondWorker.calls).toBe(1);
+  });
+
+  test("stops re-requesting a worker highlight once the retry budget is spent", async () => {
+    const file = createLargeHighlightTestFile("exhausted-worker-retries");
+    const theme = resolveTheme("github-dark-default", null);
+
+    // Viewport prefetch re-requests every file in its halo on each scroll, so a failure that keeps
+    // repeating must settle on cached plain rows instead of restarting the highlight every time.
+    for (const expectedCalls of [1, 1]) {
+      const worker = registerFailingHighlightWorkerForTest();
+      const result = await prefetchHighlightedDiff({ file, offloadLargeDiff: true, theme });
+      expect(result.retryable).toBe(true);
+      expect(worker.calls).toBe(expectedCalls);
+    }
+
+    const settledWorker = registerFailingHighlightWorkerForTest();
+    const settled = await prefetchHighlightedDiff({ file, offloadLargeDiff: true, theme });
+    expect(settled.retryable).toBeUndefined();
+    expect(settledWorker.calls).toBe(0);
+  });
+
+  test("reclaims abandoned revision budgets while retaining the most recent failure", async () => {
+    const base = createLargeHighlightTestFile("abandoned-revision-budget");
+    const theme = resolveTheme("github-dark-default", null);
+
+    /** Give each abandoned snapshot its own highlight identity without rebuilding its source. */
+    function createTestRevision(index: number) {
+      return { ...base, id: `abandoned-revision-budget-${index}` };
+    }
+
+    // Exceed the 1,024-key retry-history bound without ever revisiting the first failures.
+    for (let index = 0; index < 1_100; index += 1) {
+      registerFailingHighlightWorkerForTest();
+      await prefetchHighlightedDiff({
+        file: createTestRevision(index),
+        offloadLargeDiff: true,
+        theme,
+      });
+    }
+
+    // The oldest key gets a fresh retry budget rather than retaining its abandoned first failure.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const worker = registerFailingHighlightWorkerForTest();
+      await prefetchHighlightedDiff({ file: createTestRevision(0), offloadLargeDiff: true, theme });
+      expect(worker.calls).toBe(1);
+    }
+
+    // A recent key still has its original failure and settles after just one additional attempt.
+    registerFailingHighlightWorkerForTest();
+    await prefetchHighlightedDiff({
+      file: createTestRevision(1_099),
+      offloadLargeDiff: true,
+      theme,
+    });
+    const worker = registerFailingHighlightWorkerForTest();
+    const settled = await prefetchHighlightedDiff({
+      file: createTestRevision(1_099),
+      offloadLargeDiff: true,
+      theme,
+    });
+    expect(settled.retryable).toBeUndefined();
+    expect(worker.calls).toBe(0);
+  });
+
+  test("wakes a reader holding provisional rows when the key finally caches a result", async () => {
+    const file = createLargeHighlightTestFile("provisional-reader-wakeup");
+    const theme = resolveTheme("github-dark-default", null);
+    const cacheKey = highlightedDiffCacheKey(theme, file);
+
+    registerFailingHighlightWorkerForTest();
+    const first = await prefetchHighlightedDiff({ file, offloadLargeDiff: true, theme });
+    expect(first.retryable).toBe(true);
+
+    // A mounted file showing those provisional rows has no other signal: viewport prefetch fills
+    // the shared cache without rendering anything.
+    let notified = 0;
+    const unsubscribe = subscribeToHighlightedDiff(cacheKey, () => {
+      notified += 1;
+    });
+
+    try {
+      registerFailingHighlightWorkerForTest();
+      await prefetchHighlightedDiff({ file, offloadLargeDiff: true, theme });
+
+      expect(notified).toBe(1);
+    } finally {
+      unsubscribe();
+    }
+
+    // Unsubscribed readers stop hearing about the key.
+    await prefetchHighlightedDiff({ file, offloadLargeDiff: true, theme });
+    expect(notified).toBe(1);
+  });
+
+  test("wakes a provisional reader when the retry completes before it subscribes", async () => {
+    const file = createLargeHighlightTestFile("late-provisional-reader");
+    const theme = resolveTheme("github-dark-default", null);
+    registerFailingHighlightWorkerForTest();
+    const first = await prefetchHighlightedDiff({ file, offloadLargeDiff: true, theme });
+    expect(first.retryable).toBe(true);
+
+    // Complete a successful retry in the window between the provisional render and its effect.
+    const successful = await prefetchHighlightedDiff({ file, theme });
+    expect(successful.retryable).toBeUndefined();
+    expect(successful.additionLines.length).toBeGreaterThan(0);
+
+    let notified = 0;
+    const unsubscribe = subscribeToHighlightedDiff(highlightedDiffCacheKey(theme, file), () => {
+      notified += 1;
+    });
+    try {
+      expect(notified).toBe(1);
+    } finally {
+      unsubscribe();
+    }
   });
 
   test("reuses source-backed highlights for equivalent versioned providers", () => {
