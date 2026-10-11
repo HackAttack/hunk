@@ -301,3 +301,186 @@ describe("sanitizeGitPatchText", () => {
     );
   });
 });
+
+describe("combined Git patch normalization", () => {
+  test("converts a two-parent conflict diff into a first-parent unified diff", () => {
+    const combinedPatch = [
+      "diff --cc notes.txt",
+      "index 0459513,a7453f0..0000000",
+      "--- a/notes.txt",
+      "+++ b/notes.txt",
+      "@@@ -1,1 -1,1 +1,5 @@@",
+      "++<<<<<<< HEAD",
+      " +upstream",
+      "++=======",
+      "+ feature",
+      "++>>>>>>> topic",
+      "",
+    ].join("\n");
+
+    expect(sanitizeGitPatchText(combinedPatch)).toBe(
+      [
+        "diff --git a/notes.txt b/notes.txt",
+        "index 0459513,a7453f0..0000000",
+        "--- a/notes.txt",
+        "+++ b/notes.txt",
+        "@@ -1,1 +1,5 @@",
+        "+<<<<<<< HEAD",
+        " upstream",
+        "+=======",
+        "+feature",
+        "+>>>>>>> topic",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  test("omits lines deleted only from another parent", () => {
+    const combinedPatch = [
+      "diff --cc notes.txt",
+      "index 1111111,2222222..0000000",
+      "--- a/notes.txt",
+      "+++ b/notes.txt",
+      "@@@ -1,3 -1,3 +1,3 @@@",
+      "- main",
+      " -topic",
+      "++resolved",
+      "  common",
+      "  tail",
+      "",
+    ].join("\n");
+
+    expect(sanitizeGitPatchText(combinedPatch)).toBe(
+      [
+        "diff --git a/notes.txt b/notes.txt",
+        "index 1111111,2222222..0000000",
+        "--- a/notes.txt",
+        "+++ b/notes.txt",
+        "@@ -1,3 +1,3 @@",
+        "-main",
+        "+resolved",
+        " common",
+        " tail",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  test("rewrites binary combined entries without unified file headers", () => {
+    const combinedPatch = [
+      "diff --cc data.bin",
+      "index ff69e82,fdd5296..0000000",
+      "Binary files differ",
+      "",
+    ].join("\n");
+
+    expect(sanitizeGitPatchText(combinedPatch)).toBe(
+      [
+        "diff --git a/data.bin b/data.bin",
+        "index ff69e82,fdd5296..0000000",
+        "Binary files differ",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  test("keeps only the first parent path in combined-all-paths headers", () => {
+    const combinedPatch = [
+      "diff --cc renamed.txt",
+      "index 1111111,2222222..0000000",
+      "--- a/first-name.txt",
+      "--- a/second-name.txt",
+      "+++ b/renamed.txt",
+      "@@@ -1,1 -1,1 +1,1 @@@",
+      "-old",
+      "++new",
+      "",
+    ].join("\n");
+
+    expect(sanitizeGitPatchText(combinedPatch)).toBe(
+      [
+        "diff --git a/first-name.txt b/renamed.txt",
+        "index 1111111,2222222..0000000",
+        "--- a/first-name.txt",
+        "+++ b/renamed.txt",
+        "@@ -1,1 +1,1 @@",
+        "-old",
+        "+new",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  test("normalizes combined headers with quoted paths and multiple parents", () => {
+    const combinedPatch = [
+      'diff --combined "notes copy.txt"',
+      "index 1111111,2222222,3333333..4444444",
+      '--- "a/notes copy.txt"',
+      '+++ "b/notes copy.txt"',
+      "@@@@ -1,1 -1,1 -1,1 +1,2 @@@@",
+      "   old",
+      "+++new",
+      "",
+    ].join("\n");
+
+    expect(sanitizeGitPatchText(combinedPatch)).toBe(
+      [
+        "diff --git a/notes copy.txt b/notes copy.txt",
+        "index 1111111,2222222,3333333..4444444",
+        "--- a/notes copy.txt",
+        "+++ b/notes copy.txt",
+        "@@ -1,1 +1,2 @@",
+        " old",
+        "+new",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  test.each(["a/data.bin", "b/data.bin", '"a/tab\\t.bin"'])(
+    "preserves unprefixed binary combined path %s",
+    (path) => {
+      const normalized = sanitizeGitPatch(
+        `diff --cc ${path}\nindex 1111111,2222222..0000000\nBinary files differ\n`,
+      );
+      const expectedPath = path === '"a/tab\\t.bin"' ? "a/tab\t.bin" : path;
+      if (normalized.filePaths[0]) {
+        expect(normalized.filePaths[0].path).toBe(expectedPath);
+      } else {
+        expect(normalized.text).toContain(`diff --git a/${path} b/${path}`);
+      }
+    },
+  );
+
+  test.each([
+    ["a/notes.txt", "a/notes.txt"],
+    ["i/a/notes.txt", "w/a/notes.txt"],
+  ])("normalizes combined unified-header pair %s / %s", (oldPath, newPath) => {
+    const input = [
+      "diff --cc a/notes.txt",
+      `--- ${oldPath}`,
+      `+++ ${newPath}`,
+      "@@@ -1 -1 +1 @@@",
+      "--old",
+      "++new",
+      "",
+    ].join("\n");
+    expect(sanitizeGitPatchText(input)).toBe(
+      [
+        "diff --git a/a/notes.txt b/a/notes.txt",
+        "--- a/a/notes.txt",
+        "+++ b/a/notes.txt",
+        "@@ -1 +1 @@",
+        "-old",
+        "+new",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  test("leaves ordinary unified patches unchanged", () => {
+    const patch = "diff --git a/a.txt b/a.txt\n@@ -1 +1 @@\n-old\n+new\n";
+
+    expect(sanitizeGitPatchText(patch)).toBe(patch);
+  });
+});
