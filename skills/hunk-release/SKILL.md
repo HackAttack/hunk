@@ -42,7 +42,7 @@ Read the pending Changesets, then generate metadata and the published release no
 ```sh
 bun run release:version
 bun run generate:changelog
-git diff -- package.json packages CHANGELOG.md .changeset website
+git diff -- package.json bun.lock packages CHANGELOG.md .changeset website
 ```
 
 Verify the intended versions, consumed Changesets, and new changelog section. Do not force a bump by hand-editing generated versions.

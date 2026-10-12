@@ -41,7 +41,7 @@
     },
     "packages/hunk": {
       "name": "hunkdiff",
-      "version": "0.22.0",
+      "version": "0.23.0",
       "bin": {
         "hunk": "./bin/hunk.cjs",
         "hunkdiff": "./bin/hunk.cjs",
