@@ -117,6 +117,15 @@ export const EXTENSION_CATALOG: readonly ExtensionListing[] = [
     apiVersion: 6,
   },
   {
+    repo: "brettinternet/hunk-guide",
+    name: "hunk-guide",
+    summary:
+      "Walks a changeset as a guided tour of ordered sections in a pane, with exact-line navigation and review progress kept per session.",
+    categories: ["Pane", "Command"],
+    version: "0.1.0",
+    apiVersion: 30,
+  },
+  {
     repo: "evantravers/hunk-mark-as-reviewed",
     name: "hunk-mark-as-reviewed",
     summary:
@@ -166,6 +175,15 @@ export const EXTENSION_CATALOG: readonly ExtensionListing[] = [
     categories: ["Pane", "Command"],
     version: "0.1.0",
     apiVersion: 6,
+  },
+  {
+    repo: "LandonSchropp/hunk-verdict",
+    name: "hunk-verdict",
+    summary:
+      "Approves, denies, or comments on a diff from inside Hunk, and hands the decision to a listening agent.",
+    categories: ["Pane", "Keyboard mode", "Command"],
+    version: "0.3.0",
+    apiVersion: 25,
   },
   {
     repo: "meldron/hunk-mark-read",
