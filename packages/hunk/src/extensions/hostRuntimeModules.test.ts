@@ -5,6 +5,10 @@ import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, test } from "bun:test";
 import { TextAttributes } from "@opentui/core";
 import { isValidElement, useState } from "react";
+import {
+  createTestPackageExtension,
+  TEST_PACKAGE_EXTENSION_RESULT,
+} from "../../../../test/helpers/extensionPackageTestFixtures";
 import { HunkExtensionUserError } from "../extension-api";
 import {
   registerHostRuntimeModules,
@@ -274,6 +278,30 @@ module.exports = {
     expect(mod.default).toEqual({ language: "graphql" });
   });
 
+  test("preserves export conditions, host identity, data strings, and transitive imports", async () => {
+    const root = mkdtempSync(join(tmpdir(), "hunk-host-packages-"));
+    tempDirs.push(root);
+    const entry = createTestPackageExtension(root);
+    registerHostRuntimeModules([entry]);
+
+    const mod = await import(pathToFileURL(entry).href);
+
+    expect(mod.default).toEqual(TEST_PACKAGE_EXTENSION_RESULT);
+    expect(mod.reexported).toBe("feature");
+    expect(mod.useState).toBe(useState);
+  });
+
+  test("keeps the existing asynchronous-hook limitation for synchronous CommonJS source require", async () => {
+    const root = mkdtempSync(join(tmpdir(), "hunk-host-commonjs-"));
+    tempDirs.push(root);
+    createTestPackageExtension(root);
+    const path = join(root, "commonjs.ts");
+    writeFileSync(path, `export default require("fixture-pkg/commonjs");\n`);
+
+    // Correct export resolution does not make Bun's asynchronous onLoad hook synchronous.
+    await expect(importTempExtension(path)).rejects.toThrow(/require\(\) async module/);
+  });
+
   test("does not resolve a type-only import the transpiler erases", async () => {
     const path = writeTempExtension(
       "ext.ts",
@@ -285,10 +313,10 @@ module.exports = {
     expect(mod.default.ready).toBe(true);
   });
 
-  test("leaves an unknown package bare and the import rejects", async () => {
+  test("reports an unknown package without falling back to compiled resolution", async () => {
     const path = writeTempExtension("ext.ts", `import "not-a-real-package";\nexport default {};\n`);
-    expect(rewriteInstalledPackageSpecifiers(`import "not-a-real-package";\n`, path)).toBe(
-      `import "not-a-real-package";\n`,
+    expect(() => rewriteInstalledPackageSpecifiers(`import "not-a-real-package";\n`, path)).toThrow(
+      /not-a-real-package/,
     );
 
     await expect(importTempExtension(path)).rejects.toThrow(/not-a-real-package/);
@@ -359,18 +387,8 @@ describe("rewriteInstalledPackageSpecifiers", () => {
     );
     writeFileSync(join(pkgDir, "entry.js"), `export const language = "md";\n`);
 
-    const original = Bun.resolveSync;
-    Bun.resolveSync = (() => {
-      throw Object.assign(new Error("Cannot find package 'esm-only'"), {
-        code: "ERR_MODULE_NOT_FOUND",
-      });
-    }) as typeof Bun.resolveSync;
-    try {
-      const rewritten = rewriteInstalledPackageSpecifiers(`import pkg from "esm-only";\n`, entry);
-      expect(rewritten).toContain(pathToFileURL(join(pkgDir, "entry.js")).href);
-    } finally {
-      Bun.resolveSync = original;
-    }
+    const rewritten = rewriteInstalledPackageSpecifiers(`import pkg from "esm-only";\n`, entry);
+    expect(rewritten).toContain(pathToFileURL(join(pkgDir, "entry.js")).href);
   });
 
   test("rewrites a root-level import condition when exports has no dot key", () => {
@@ -389,18 +407,8 @@ describe("rewriteInstalledPackageSpecifiers", () => {
     );
     writeFileSync(join(pkgDir, "entry.js"), `export const language = "md";\n`);
 
-    const original = Bun.resolveSync;
-    Bun.resolveSync = (() => {
-      throw Object.assign(new Error("Cannot find package 'esm-root'"), {
-        code: "ERR_MODULE_NOT_FOUND",
-      });
-    }) as typeof Bun.resolveSync;
-    try {
-      const rewritten = rewriteInstalledPackageSpecifiers(`import pkg from "esm-root";\n`, entry);
-      expect(rewritten).toContain(pathToFileURL(join(pkgDir, "entry.js")).href);
-    } finally {
-      Bun.resolveSync = original;
-    }
+    const rewritten = rewriteInstalledPackageSpecifiers(`import pkg from "esm-root";\n`, entry);
+    expect(rewritten).toContain(pathToFileURL(join(pkgDir, "entry.js")).href);
   });
 
   test("keeps relative, node, and bun specifiers unchanged", () => {

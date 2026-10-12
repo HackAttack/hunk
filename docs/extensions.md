@@ -71,7 +71,14 @@ avoiding ids already claimed by other entries in the manifest.
 
 Because the manifest is a real `package.json`, a folder extension may depend on
 npm packages: declare them, install them into the folder's own `node_modules`,
-and imports resolve from the entry file the way they do in any other package.
+and import them from the extension. This also works in the compiled Hunk binary;
+package lookup follows the importing file and honors package export conditions
+and subpaths.
+
+Use ES module imports (`import ... from "package"` or `await import("package")`)
+for source dependencies. Synchronous `require()` of JavaScript/CommonJS files
+handled by Hunk's asynchronous source-loading hook is not supported. Resolving
+the correct `require` export does not remove that existing Bun limitation.
 
 The `hunk` field may also state the minimum extension API version the folder
 needs:
