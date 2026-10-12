@@ -2,7 +2,9 @@ import { existsSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { Command, Option } from "commander";
 import {
+  CURSOR_LINE_VALUES,
   isLayoutModeInput,
+  LAYOUT_MODE_VALUES,
   normalizeLayoutModeInput,
   type CliInput,
   type CommonOptions,
@@ -55,6 +57,7 @@ import {
   HIGHLIGHT_RANGE_MESSAGE,
   RELOAD_SEPARATOR_MESSAGE,
 } from "../session/agent/errors";
+import { COMPLETION_SHELLS, renderShellCompletion } from "./shellCompletion";
 import { DEFAULT_FILE_GAP, DEFAULT_HUNK_GAP, parseReviewGap } from "../core/run/reviewGap";
 import { DEFAULT_SCROLL_OFF, parseScrollOff } from "../core/run/scrollOff";
 import { DEFAULT_TAB_WIDTH, parseTabWidth } from "../core/run/tabWidth";
@@ -82,6 +85,7 @@ export interface CliReferenceOption {
     | "scrollOff"
     | "collect";
   readonly defaultValue?: string;
+  readonly values?: readonly string[];
   /** Default applied directly by Commander (as opposed to a config-resolved default). */
   readonly commanderDefault?: string;
   readonly hidden?: boolean;
@@ -108,11 +112,17 @@ export interface CliReferenceCommand {
 
 /** Review flags registered on every full-screen review command. */
 export const COMMON_REVIEW_OPTIONS = [
-  { flag: "--mode <mode>", description: "layout mode: auto, split, unified", parse: "layout" },
+  {
+    flag: "--mode <mode>",
+    description: "layout mode: auto, split, unified",
+    parse: "layout",
+    values: LAYOUT_MODE_VALUES,
+  },
   {
     flag: "--cursor-line <style>",
     description: "current-line marker: row, number, off",
     parse: "cursorLine",
+    values: CURSOR_LINE_VALUES,
   },
   { flag: "--theme <theme>", description: "named theme override" },
   {
@@ -340,6 +350,15 @@ export const CLI_REFERENCE_COMMANDS = {
     commonReviewOptions: true,
     watch: true,
   },
+  completion: {
+    path: "completion",
+    summary: "print a shell completion script",
+    synopsis: [`hunk completion <${COMPLETION_SHELLS.join("|")}>`],
+    details: [
+      'Load it into the current shell with `source <(hunk completion zsh)` or `eval "$(hunk completion bash)"`, and add that line to your shell startup file to keep it.',
+      "For Zsh, initialize completion with `autoload -Uz compinit; compinit` before loading the script, unless your shell framework already does so.",
+    ],
+  },
   "markup-render": {
     path: "markup render",
     summary: "preview experimental STML markup as terminal text",
@@ -412,6 +431,7 @@ export const CLI_REFERENCE_COMMANDS = {
       {
         flag: "--method <method>",
         description: `install method instead of the detected one: ${UPDATE_METHOD_VALUES.join(", ")}`,
+        values: UPDATE_METHOD_VALUES,
       },
       {
         flag: "--check",
@@ -690,6 +710,7 @@ function renderCliHelp() {
     "  hunk skill path [name]                  print a bundled Hunk skill path",
     "  hunk extension <subcommand>             install and manage shared extensions",
     "  hunk update [version]                   update Hunk with the package manager that installed it",
+    `  hunk completion <${COMPLETION_SHELLS.join("|")}>              print a shell completion script`,
     "  hunk daemon serve                       run the local Hunk session daemon",
     "  hunk daemon status                      report the daemon's build and attached windows",
     "  hunk daemon restart                     replace the daemon with one from this build",
@@ -2025,6 +2046,30 @@ async function parseMarkupCommand(tokens: string[]): Promise<ParsedCliInput> {
   throw new Error("Supported markup subcommands are render and guide.");
 }
 
+function parseCompletionCommand(tokens: string[]): HelpCommandInput {
+  if (tokens.includes("--help") || tokens.includes("-h")) {
+    const command = createCliReferenceCommand("completion").argument(
+      "<shell>",
+      `shell to complete for: ${COMPLETION_SHELLS.join(", ")}`,
+    );
+    return { kind: "help", text: `${command.helpInformation().trimEnd()}\n` };
+  }
+
+  const shell = COMPLETION_SHELLS.find((name) => name === tokens[0]);
+  if (!shell || tokens.length > 1) {
+    throw new Error(`Usage: hunk completion <${COMPLETION_SHELLS.join("|")}>`);
+  }
+
+  return {
+    kind: "help",
+    text: renderShellCompletion(shell, {
+      commands: CLI_REFERENCE_COMMANDS,
+      commonReviewOptions: COMMON_REVIEW_OPTIONS,
+      watchOption: WATCH_OPTION,
+    }),
+  };
+}
+
 /** Parse `hunk skill ...` for bundled skill discovery commands. */
 async function parseSkillCommand(tokens: string[]): Promise<HelpCommandInput> {
   const [subcommand, ...rest] = tokens;
@@ -2592,6 +2637,8 @@ export async function parseCli(argv: string[]): Promise<ParsedCliInput> {
       return parseExtensionCommand(rest);
     case "update":
       return parseUpdateCommand(rest);
+    case "completion":
+      return parseCompletionCommand(rest);
     case "daemon":
     case "mcp":
       return parseDaemonCommand(rest);
