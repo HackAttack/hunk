@@ -31,7 +31,7 @@ test("rewrites only literal module references and preserves data, comments, and 
     "import:pkg",
     "import:pkg",
     "import:pkg",
-    "import:pkg",
+    "dynamic-import:pkg",
     "require:pkg",
   ]);
   expect(rewritten).toBe(
@@ -40,7 +40,7 @@ test("rewrites only literal module references and preserves data, comments, and 
       `import "resolved:import:pkg";`,
       `export { value } from "resolved:import:pkg";`,
       `export * from "resolved:import:pkg";`,
-      `const dynamic = import("resolved:import:pkg");`,
+      `const dynamic = import("resolved:dynamic-import:pkg");`,
       `const required = require("resolved:require:pkg");`,
       ...source.split("\n").slice(6),
     ].join("\n"),

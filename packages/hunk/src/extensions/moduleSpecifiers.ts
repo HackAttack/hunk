@@ -1,7 +1,7 @@
 import { parse, type Node } from "acorn";
 import { analyze } from "eslint-scope";
 
-export type ModuleSpecifierKind = "import" | "require";
+export type ModuleSpecifierKind = "import" | "dynamic-import" | "require";
 
 /** Rewrite only literal module references, leaving data strings and member calls intact. */
 export function rewriteModuleSpecifiers(
@@ -42,6 +42,7 @@ export function rewriteModuleSpecifiers(
       node.type === "ImportExpression"
     ) {
       source = fields.source;
+      if (node.type === "ImportExpression") kind = "dynamic-import";
     } else if (node.type === "CallExpression") {
       const callee = fields.callee as Node & { name?: string };
       const args = fields.arguments as unknown[];

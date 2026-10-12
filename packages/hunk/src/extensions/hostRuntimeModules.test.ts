@@ -6,6 +6,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { TextAttributes } from "@opentui/core";
 import { isValidElement, useState } from "react";
 import {
+  createTestOptionalPackageExtension,
   createTestPackageExtension,
   TEST_PACKAGE_EXTENSION_RESULT,
 } from "../../../../test/helpers/extensionPackageTestFixtures";
@@ -278,17 +279,40 @@ module.exports = {
     expect(mod.default).toEqual({ language: "graphql" });
   });
 
-  test("preserves export conditions, host identity, data strings, and transitive imports", async () => {
-    const root = mkdtempSync(join(tmpdir(), "hunk-host-packages-"));
+  test.each([".", "src"])(
+    "preserves transitive packages and host identity with entry in %s",
+    async (directory) => {
+      const root = mkdtempSync(join(tmpdir(), "hunk-host-packages-"));
+      tempDirs.push(root);
+      const entry = createTestPackageExtension(root, join(root, directory));
+      registerHostRuntimeModules([entry]);
+
+      const mod = await import(pathToFileURL(entry).href);
+
+      expect(mod.default).toEqual(TEST_PACKAGE_EXTENSION_RESULT);
+      expect(mod.reexported).toBe("feature");
+      expect(mod.useState).toBe(useState);
+    },
+  );
+
+  test("does not claim unrelated siblings of a rewritten package file", async () => {
+    const root = mkdtempSync(join(tmpdir(), "hunk-host-package-sibling-"));
     tempDirs.push(root);
-    const entry = createTestPackageExtension(root);
-    registerHostRuntimeModules([entry]);
+    await importTempExtension(createTestPackageExtension(root, join(root, "src")));
+    const unrelated = join(root, "node_modules", "fixture-pkg", "unrelated.js");
+    writeFileSync(unrelated, `import { useState } from "react"; export default useState();\n`);
 
-    const mod = await import(pathToFileURL(entry).href);
+    const mod = await import(pathToFileURL(unrelated).href);
 
-    expect(mod.default).toEqual(TEST_PACKAGE_EXTENSION_RESULT);
-    expect(mod.reexported).toBe("feature");
-    expect(mod.useState).toBe(useState);
+    expect(mod.default).toBe("wrong-instance");
+  });
+
+  test("keeps optional import and require failures inside the extension's catch blocks", async () => {
+    const root = mkdtempSync(join(tmpdir(), "hunk-host-optional-"));
+    tempDirs.push(root);
+    const mod = await importTempExtension(createTestOptionalPackageExtension(root));
+
+    expect(mod.default).toEqual({ missing: true, blocked: true, required: true, unused: true });
   });
 
   test("keeps the existing asynchronous-hook limitation for synchronous CommonJS source require", async () => {

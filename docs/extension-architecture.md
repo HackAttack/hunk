@@ -147,10 +147,15 @@ The rewrite reads transpiled syntax and lexical scopes, so documentation strings
 member calls, and locally bound `require` functions stay unchanged. Other bare
 package references resolve through `installedPackageResolution.ts` against the
 importer's real filesystem directory, including nested/subpath exports and
-Bun/Node import-versus-require conditions. Resolution failures do not fall back
-to the compiled loader, which can bypass blocked exports. The asynchronous
-source hook still cannot serve synchronous `require()` of JavaScript/CommonJS
-source; this change does not introduce a second evaluator to work around it.
+Bun/Node import-versus-require conditions. Reachable ESM dependency files receive
+file-scoped hooks too, including relative helpers outside the entry directory;
+unrelated files and native CommonJS packages are not claimed by those hooks.
+Resolution failures do not fall back to the compiled loader, which can bypass
+blocked exports. Failed dynamic imports and runtime `require` calls target lazy
+failure modules so the extension can catch the error when the operation executes.
+The asynchronous source hook still cannot serve synchronous `require()` of
+JavaScript/CommonJS source; this change does not introduce a second evaluator
+to work around it.
 
 ## Four-edge pane system
 

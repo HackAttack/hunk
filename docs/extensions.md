@@ -73,7 +73,9 @@ Because the manifest is a real `package.json`, a folder extension may depend on
 npm packages: declare them, install them into the folder's own `node_modules`,
 and import them from the extension. This also works in the compiled Hunk binary;
 package lookup follows the importing file and honors package export conditions
-and subpaths.
+and subpaths, including transitive ES module dependencies outside the entry's
+source directory. Optional dynamic imports can still catch missing-package or
+blocked-export errors at execution time.
 
 Use ES module imports (`import ... from "package"` or `await import("package")`)
 for source dependencies. Synchronous `require()` of JavaScript/CommonJS files

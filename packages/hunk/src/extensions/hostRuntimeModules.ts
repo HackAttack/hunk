@@ -1,9 +1,14 @@
 import { readFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import { resolveCanonicalPath } from "../core/run/paths";
-import { resolveInstalledPackageSpecifier } from "./installedPackageResolution";
+import {
+  isESModuleDependency,
+  resolveInstalledPackageSpecifier,
+  resolveRelativeModulePath,
+} from "./installedPackageResolution";
 import { resolveManagedNpmModuleRoot } from "./manage/workspace";
-import { rewriteModuleSpecifiers } from "./moduleSpecifiers";
+import { rewriteModuleSpecifiers, type ModuleSpecifierKind } from "./moduleSpecifiers";
 
 /**
  * Serve host-owned modules and installed packages to dynamically imported extension files.
@@ -97,6 +102,7 @@ function transpilerFor(loader: TranspilerLoader) {
 
 let virtualModulesRegistered = false;
 const registeredSourceRoots = new Set<string>();
+const registeredDependencyFiles = new Set<string>();
 
 /** Report whether the Bun runtime plugin API is available. */
 function canRegisterPlugins() {
@@ -159,6 +165,9 @@ function rewriteCompiledHostRequires(code: string) {
  * that become static imports. External imports retain the original module's location.
  */
 async function compileCommonJsHostImports(path: string, contents: string) {
+  const packageRewritten = rewriteModuleSpecifiers(contents, (specifier, kind) =>
+    hostSpecifier(specifier) ? undefined : extensionSpecifier(specifier, path, kind),
+  );
   const result = await Bun.build({
     entrypoints: [path],
     target: "bun",
@@ -168,7 +177,7 @@ async function compileCommonJsHostImports(path: string, contents: string) {
       {
         name: "hunk-commonjs-host-source",
         setup(build) {
-          build.onLoad({ filter: /.*/ }, () => ({ contents, loader: "js" }));
+          build.onLoad({ filter: /.*/ }, () => ({ contents: packageRewritten, loader: "js" }));
         },
       },
     ],
@@ -177,9 +186,107 @@ async function compileCommonJsHostImports(path: string, contents: string) {
 
   const code = await result.outputs[0]!.text();
   return {
-    contents: rewriteInstalledPackageSpecifiers(rewriteHostSpecifiers(rewriteCompiledHostRequires(code)), path),
+    contents: rewriteModuleSpecifiers(rewriteCompiledHostRequires(code), (specifier, kind) =>
+      extensionSpecifier(specifier, path, kind),
+    ),
     loader: "js" as const,
   };
+}
+
+const deferredFailures = new Map<string, string>();
+
+/** Raise a resolution failure only when the rewritten import or require actually executes. */
+function deferredFailureSpecifier(error: unknown) {
+  const key = String(error);
+  const existing = deferredFailures.get(key);
+  if (existing) return existing;
+
+  const specifier = `hunk-host-failure:${deferredFailures.size}`;
+  deferredFailures.set(key, specifier);
+  Bun.plugin({
+    name: specifier,
+    setup(build) {
+      build.module(specifier, () => {
+        throw error;
+      });
+    },
+  });
+  return specifier;
+}
+
+/** Register resolved dependency files and keep optional resolution errors catchable. */
+function extensionSpecifier(specifier: string, importerPath: string, kind: ModuleSpecifierKind) {
+  const host = hostSpecifier(specifier);
+  if (host) return host;
+
+  try {
+    const resolved = resolveInstalledPackageSpecifier(specifier, importerPath, kind);
+    const relativePath = resolveRelativeModulePath(specifier, importerPath, kind);
+    if (resolved) {
+      registerDependencyFile(kind === "require" ? resolved : fileURLToPath(resolved));
+    } else if (relativePath) {
+      registerDependencyFile(relativePath);
+    }
+    return resolved;
+  } catch (error) {
+    if (kind === "import") throw error;
+    // A virtual failure preserves strict exports without handing the original bare name to Bun.
+    return deferredFailureSpecifier(error);
+  }
+}
+
+/** Transpile one intercepted file and redirect its module references. */
+function rewriteSource(path: string, source: string) {
+  const transpiler = transpilerFor(resolveLoader(path));
+  const transpiled = transpiler.transformSync(source);
+  const scan = transpiler.scan(transpiled);
+  if (
+    scan.exports.length === 0 &&
+    !scan.imports.some((entry) => entry.kind === "import-statement") &&
+    /\b(?:module\s*\.\s*exports|exports\s*(?:\.|\[))/.test(transpiled)
+  ) {
+    return compileCommonJsHostImports(path, transpiled);
+  }
+
+  return {
+    contents: rewriteModuleSpecifiers(transpiled, (specifier, kind) =>
+      extensionSpecifier(specifier, path, kind),
+    ),
+    loader: "js" as const,
+  };
+}
+
+/** Track reachable ESM files outside extension roots without claiming unrelated or CommonJS files. */
+function registerDependencyFile(path: string) {
+  if (!/\.(?:[mc]?[jt]s|[jt]sx)$/i.test(path)) return;
+  const canonicalPath = resolveCanonicalPath(path);
+  if (registeredDependencyFiles.has(canonicalPath)) return;
+  for (const root of registeredSourceRoots) {
+    if (canonicalPath.startsWith(`${root}${sep}`)) return;
+  }
+
+  const transpiler = transpilerFor(resolveLoader(path));
+  const scanned = transpiler.scan(transpiler.transformSync(readFileSync(path, "utf8")));
+  // Runtime JS hooks erase Bun's native CommonJS format detection. Leave those files native.
+  if (
+    !scanned.exports.length &&
+    !scanned.imports.some((item) => item.kind === "import-statement") &&
+    !isESModuleDependency(path)
+  )
+    return;
+
+  registeredDependencyFiles.add(canonicalPath);
+  const escapedPaths = [...new Set([path, canonicalPath])]
+    .map((candidate) => candidate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|");
+  Bun.plugin({
+    name: `hunk-host-extension-dependency:${canonicalPath}`,
+    setup(build) {
+      build.onLoad({ filter: new RegExp(`^(?:${escapedPaths})$`) }, async (args) =>
+        rewriteSource(args.path, await Bun.file(args.path).text()),
+      );
+    },
+  });
 }
 
 /** Register transpilation and syntax-aware rewriting for an extension and its local dependencies. */
@@ -197,24 +304,7 @@ function registerSourceRoot(directory: string) {
       name: `hunk-host-extension-source:${sourceRoot}`,
       setup(build) {
         build.onLoad({ filter }, (args) => {
-          const source = readFileSync(args.path, "utf8");
-          const transpiler = transpilerFor(resolveLoader(args.path));
-          const transpiled = transpiler.transformSync(source);
-          const scan = transpiler.scan(transpiled);
-          if (
-            scan.exports.length === 0 &&
-            !scan.imports.some((entry) => entry.kind === "import-statement") &&
-            /\b(?:module\s*\.\s*exports|exports\s*(?:\.|\[))/.test(transpiled)
-          ) {
-            return compileCommonJsHostImports(args.path, transpiled);
-          }
-
-          return {
-            contents: rewriteModuleSpecifiers(transpiled, (specifier, kind) =>
-              hostSpecifier(specifier) ?? resolveInstalledPackageSpecifier(specifier, args.path, kind),
-            ),
-            loader: "js",
-          };
+          return rewriteSource(args.path, readFileSync(args.path, "utf8"));
         });
       },
     });
