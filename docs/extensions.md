@@ -130,11 +130,11 @@ repository's own README.
 
 ## Sharing and installing extensions
 
-Extensions are shared as plain git repositories — there is no registry to
-publish to. `hunk extension install` clones one into a managed directory
-(`~/.config/hunk/extensions/installed/<repo-name>/`), verifies it actually
-contains an extension, installs its npm dependencies when it declares any, and
-records the source and resolved commit:
+Extensions can be shared as Git repositories or npm packages.
+`hunk extension install` installs either source into a managed directory under
+`~/.config/hunk/extensions/installed/`, validates its extension entries, and
+records the requested source plus its resolved Git commit or npm version.
+Git and local-checkout sources keep the repository name as their install directory:
 
 ```bash
 hunk extension install acme/hunk-word-diff          # GitHub shorthand
@@ -142,18 +142,47 @@ hunk extension install acme/hunk-word-diff@v1.2.0   # pin a tag, branch, or comm
 hunk extension install git:codeberg.org/acme/ext    # any host; https:// is assumed
 hunk extension install https://github.com/acme/hunk-word-diff.git
 hunk extension install ~/dev/hunk-word-diff         # a local checkout, for testing
+hunk extension install npm:@acme/hunk-word-diff     # npm latest
+hunk extension install npm:@acme/hunk-word-diff@1.2.0
+hunk extension install 'npm:@acme/hunk-word-diff@^1.2.0'
+hunk extension install npm:@acme/hunk-word-diff@next
 ```
 
 Managed installs load through the global source group — same origin, same
 precedence, no trust prompt — because installing one is the explicit consent:
 the install asks for confirmation (or `--yes`) after stating that extensions
-run with your full user permissions. Only install repositories you trust.
+run with your full user permissions. Only install sources you trust.
 
-`hunk extension list` shows every managed install with its version, commit, and
-source. `hunk extension update [name]` re-clones one install (or all of them)
-from its recorded source — an install pinned with `@ref` stays at that ref
-until you re-install with a different one. `hunk extension remove <name>`
-deletes the install and its record. Managed installs never collide with
+npm installs require Node.js and npm on PATH and honor normal npm registry and
+credential configuration, including the launch project's `.npmrc`, user/global
+configuration, and environment overrides. Project credentials are forwarded only
+during acquisition, not saved into the managed install. Hunk forces local managed
+installation even if npm is
+configured globally. Each package has an isolated dependency workspace, and its
+hoisted helpers receive the same host APIs and React instance as the entry.
+Installation disables lifecycle scripts and automatic peer installation; publish
+ready-to-load entries, and declare host-provided packages as peers or development
+dependencies rather than runtime dependencies. Packages requiring install-time
+builds or native dependency scripts are not supported automatically. If npm tries
+to run a hook despite script suppression (including Git dependency `prepare`
+hooks in some npm versions), Hunk blocks the script and fails the staged install
+without replacing the previous version.
+
+`hunk extension list` shows every managed install with its resolved version or
+commit and requested source. `hunk extension update [name]` refreshes one install
+(or all of them) from its recorded source. Git `@ref` pins keep their ref;
+exact npm versions stay pinned, while ranges and tags are resolved again.
+`hunk extension remove <name>` deletes the install and its record.
+For npm packages, use the name shown by `list`, such as
+`hunk extension update npm:@acme/hunk-word-diff` or
+`hunk extension remove npm:@acme/hunk-word-diff`.
+
+npm directories and single-entry extension IDs use a stable `npm-` name containing
+a readable package-name prefix and its SHA-256 digest. This distinguishes scopes
+and punctuation, stays filesystem-safe, and does not change with the version.
+Use that ID in `[extension.<id>]` configuration; multi-entry manifests retain the
+existing entry-derived IDs. Failed acquisition or validation leaves the previous
+install intact. Managed installs never collide with
 extensions you copied into `~/.config/hunk/extensions/` by hand, and the
 installer refuses to overwrite an unmanaged directory of the same name.
 
@@ -186,6 +215,11 @@ To publish one:
    up at <https://github.com/topics/hunk-extension>. Opening a pull request
    against `website/src/data/extensions.ts` also lists it on
    <https://hunk.dev/extensions>.
+
+For npm publishing, the package must explicitly declare `hunk.extensions`.
+Every declared entry must be a shipped file inside the package; check `npm pack
+--dry-run` to verify the tarball includes the entries and their local imports.
+Publish with `npm publish`; users can then install `npm:<package-name>`.
 
 Before publishing, exercise the exact layout users will install:
 `hunk extension install /path/to/your/checkout` installs from a local

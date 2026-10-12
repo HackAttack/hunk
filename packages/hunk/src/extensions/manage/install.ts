@@ -1,16 +1,14 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { HunkUserError } from "../../core/run/errors";
 import { directoryContainsExtensionEntries } from "../discovery";
 import { readInstallRecords, writeInstallRecords, type ExtensionInstallRecord } from "./records";
-import type { ExtensionInstallSource } from "./source";
+import type { ExtensionInstallSource, GitExtensionInstallSource } from "./source";
+import { stageNpmPackage } from "./npm";
 
 /**
- * Everything the managed-install operations need from their caller.
- *
- * The operations are pure filesystem-and-git against `installedRoot`, so the
- * CLI runner resolves the root once from the environment and tests point it at
- * a temp directory; nothing in here reads global state.
+ * Supply managed storage, progress, time, and npm configuration to install operations.
+ * The CLI resolves the root once; tests use temporary storage and an isolated registry.
  */
 export interface ExtensionManageContext {
   /** Managed install root; created on demand. */
@@ -19,14 +17,21 @@ export interface ExtensionManageContext {
   log: (line: string) => void;
   /** Timestamp seam so tests can pin record times. */
   now?: () => Date;
+  /** Package-manager environment, including registry configuration. */
+  env?: NodeJS.ProcessEnv;
+  /** Launch directory whose project npm configuration applies. */
+  cwd?: string;
 }
 
 /** Outcome of one install or update, for the runner to phrase. */
 export interface ExtensionInstallOutcome {
   name: string;
+  displayName: string;
   directory: string;
-  commit: string;
-  /** Version from the clone's `package.json`, when it declares one. */
+  commit?: string;
+  /** Commit for Git sources or resolved version for npm sources. */
+  revision: string;
+  /** Version from the installed root's `package.json`, when it declares one. */
   version?: string;
   /** Set when dependencies were declared but could not be installed. */
   dependencyWarning?: string;
@@ -70,7 +75,7 @@ function runGit(args: string[], options: { cwd?: string } = {}) {
   return proc.stdout?.toString() ?? "";
 }
 
-/** Read one clone's `package.json` version, tolerating anything malformed. */
+/** Read one installed root's package version, tolerating missing or malformed manifests. */
 function readInstalledVersion(dir: string) {
   try {
     const manifest = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as unknown;
@@ -143,7 +148,7 @@ function installDependencies(dir: string): string | undefined {
  * fetches) the fallback is a full clone plus checkout, which accepts anything
  * `git checkout` does.
  */
-function cloneSource(source: ExtensionInstallSource, destination: string) {
+function cloneSource(source: GitExtensionInstallSource, destination: string) {
   if (source.ref === undefined) {
     runGit(["clone", "--quiet", "--depth", "1", "--", source.cloneUrl, destination]);
   } else {
@@ -170,24 +175,21 @@ function cloneSource(source: ExtensionInstallSource, destination: string) {
 }
 
 /**
- * Clone into a staging directory and validate the layout.
- *
- * Everything that can fail happens against the staging path, so the real
- * install directory is only ever swapped in whole; a failed install or update
- * leaves whatever was there before untouched. Dependencies are deliberately
- * not installed here: an update compares the staged commit first, so an
- * unchanged install never pays for a dependency pass.
+ * Acquire either source into hidden staging storage and validate its extension layout.
+ * Failures leave the installed directory untouched. Git dependencies wait until commit
+ * comparison; npm acquires its complete dependency workspace before version comparison.
  */
-function stageClone(context: ExtensionManageContext, source: ExtensionInstallSource) {
+function stageSource(context: ExtensionManageContext, source: ExtensionInstallSource) {
   mkdirSync(context.installedRoot, { recursive: true });
-  // Pid-suffixed so two overlapping commands for the same name cannot clone
-  // into — or clean up — each other's staging directory.
-  const stagingDir = join(context.installedRoot, `.staging-${source.name}-${process.pid}`);
-  rmSync(stagingDir, { recursive: true, force: true });
+  const stagingDir = mkdtempSync(join(context.installedRoot, `.staging-${source.name}-`));
 
-  let commit: string;
   try {
-    commit = cloneSource(source, stagingDir);
+    if (source.kind === "npm") {
+      const version = stageNpmPackage(source, stagingDir, context.env, context.cwd);
+      return { stagingDir, revision: version, version };
+    }
+
+    const commit = cloneSource(source, stagingDir);
 
     if (!directoryContainsExtensionEntries(stagingDir)) {
       throw new HunkUserError(`${source.spec} does not contain a Hunk extension.`, [
@@ -195,7 +197,7 @@ function stageClone(context: ExtensionManageContext, source: ExtensionInstallSou
       ]);
     }
 
-    return { stagingDir, commit };
+    return { stagingDir, revision: commit, commit };
   } catch (error) {
     rmSync(stagingDir, { recursive: true, force: true });
     throw error;
@@ -213,14 +215,14 @@ function prepareStagedDependencies(context: ExtensionManageContext, stagingDir: 
 }
 
 /**
- * Swap one staged clone into its final directory.
+ * Swap one staged workspace into its final directory.
  *
  * The existing install is moved aside rather than deleted first, so a rename
  * that fails (a file held open on Windows, say) can restore it: the update
  * either lands whole or leaves the previous install exactly where it was.
  * The aside directory is dot-prefixed so discovery never scans it.
  */
-function promoteStagedClone(stagingDir: string, directory: string) {
+function promoteStagedSource(stagingDir: string, directory: string) {
   const previousDir = join(dirname(directory), `.previous-${basename(directory)}`);
   rmSync(previousDir, { recursive: true, force: true });
 
@@ -259,7 +261,7 @@ function saveRecord(context: ExtensionManageContext, name: string, record: Exten
 }
 
 /**
- * Install one extension repository into the managed root.
+ * Install one Git or npm extension into the managed root.
  *
  * Refuses a name that is already recorded (update is the explicit path for
  * that) or whose directory already exists unrecorded, so a hand-placed folder
@@ -272,7 +274,7 @@ export function installExtension(
   const records = readInstallRecords(context.installedRoot);
   const directory = join(context.installedRoot, source.name);
 
-  if (records[source.name]) {
+  if (Object.hasOwn(records, source.name)) {
     throw new HunkUserError(`"${source.name}" is already installed.`, [
       `Run \`hunk extension update ${source.name}\` to refresh it, or \`hunk extension remove ${source.name}\` first.`,
     ]);
@@ -284,106 +286,149 @@ export function installExtension(
     );
   }
 
-  context.log(`cloning ${source.cloneUrl}${source.ref ? ` @ ${source.ref}` : ""}…`);
-  const { stagingDir, commit } = stageClone(context, source);
-  const dependencyWarning = prepareStagedDependencies(context, stagingDir);
-  promoteStagedClone(stagingDir, directory);
+  context.log(`installing ${source.spec}…`);
+  const staged = stageSource(context, source);
+  const dependencyWarning = prepareAndPromoteSource(context, source, staged.stagingDir, directory);
 
   const timestamp = (context.now?.() ?? new Date()).toISOString();
   saveRecord(context, source.name, {
     source: source.spec,
-    cloneUrl: source.cloneUrl,
-    ...(source.ref !== undefined ? { ref: source.ref } : {}),
-    commit,
+    ...sourceRecord(source, staged.revision),
     installedAt: timestamp,
     updatedAt: timestamp,
   });
 
   return {
     name: source.name,
+    displayName: source.kind === "npm" ? source.packageName : source.name,
     directory,
-    commit,
+    commit: staged.commit,
+    revision: staged.revision,
     version: readInstalledVersion(directory),
     ...(dependencyWarning !== undefined ? { dependencyWarning } : {}),
   };
 }
 
+/** Prepare Git dependencies and promote either backend, cleaning staging on every failure path. */
+function prepareAndPromoteSource(
+  context: ExtensionManageContext,
+  source: ExtensionInstallSource,
+  stagingDir: string,
+  directory: string,
+) {
+  try {
+    const warning =
+      source.kind === "git" ? prepareStagedDependencies(context, stagingDir) : undefined;
+    promoteStagedSource(stagingDir, directory);
+    return warning;
+  } finally {
+    rmSync(stagingDir, { recursive: true, force: true });
+  }
+}
+
+/** Build backend-specific persisted identity without inventing Git commits for registry packages. */
+function sourceRecord(source: ExtensionInstallSource, revision: string) {
+  return source.kind === "npm"
+    ? {
+        kind: "npm" as const,
+        packageName: source.packageName,
+        selector: source.selector,
+        version: revision,
+      }
+    : { kind: "git" as const, cloneUrl: source.cloneUrl, ref: source.ref, commit: revision };
+}
+
 /** Outcome of one update pass over a single managed install. */
 export interface ExtensionUpdateOutcome extends ExtensionInstallOutcome {
-  previousCommit: string;
+  previousCommit?: string;
+  previousRevision: string;
   changed: boolean;
 }
 
 /**
- * Update one managed install by re-cloning its recorded source.
- *
- * Re-cloning rather than fetching keeps the operation insensitive to how the
- * previous clone was made (shallow, force-pushed ref, moved tag) at the cost
- * of bandwidth, which is the right trade for something run occasionally.
+ * Refresh a managed install by reacquiring its recorded source and comparing backend identity.
+ * Git re-cloning avoids assumptions about shallow checkouts or moved refs. npm re-resolves
+ * the original selector in isolated storage. Unchanged identities keep the installed workspace.
  */
 export function updateExtension(
   context: ExtensionManageContext,
   name: string,
 ): ExtensionUpdateOutcome {
   const records = readInstallRecords(context.installedRoot);
-  const record = records[name];
-  if (!record) {
-    throw new HunkUserError(`"${name}" is not a managed install.`, [
-      "Run `hunk extension list` to see managed installs.",
-    ]);
-  }
+  name = resolveManagedName(records, name);
+  const record = records[name]!;
 
-  const source: ExtensionInstallSource = {
-    spec: record.source,
-    cloneUrl: record.cloneUrl,
-    ...(record.ref !== undefined ? { ref: record.ref } : {}),
-    name,
-  };
+  const source: ExtensionInstallSource =
+    record.kind === "npm"
+      ? {
+          kind: "npm",
+          spec: record.source,
+          packageName: record.packageName,
+          selector: record.selector,
+          name,
+        }
+      : { kind: "git", spec: record.source, cloneUrl: record.cloneUrl, ref: record.ref, name };
+  const previousRevision = record.kind === "npm" ? record.version : record.commit;
+  const previousCommit = record.kind === "npm" ? undefined : record.commit;
   const directory = join(context.installedRoot, name);
 
-  context.log(`checking ${record.cloneUrl}${record.ref ? ` @ ${record.ref}` : ""}…`);
-  const { stagingDir, commit } = stageClone(context, source);
+  context.log(`checking ${record.source}…`);
+  const staged = stageSource(context, source);
 
-  if (commit === record.commit && existsSync(directory)) {
-    rmSync(stagingDir, { recursive: true, force: true });
+  if (staged.revision === previousRevision && existsSync(directory)) {
+    rmSync(staged.stagingDir, { recursive: true, force: true });
     return {
       name,
+      displayName: source.kind === "npm" ? source.packageName : name,
       directory,
-      commit,
-      previousCommit: record.commit,
+      commit: staged.commit,
+      revision: staged.revision,
+      previousCommit,
+      previousRevision,
       changed: false,
       version: readInstalledVersion(directory),
     };
   }
 
-  const dependencyWarning = prepareStagedDependencies(context, stagingDir);
-  promoteStagedClone(stagingDir, directory);
+  const dependencyWarning = prepareAndPromoteSource(context, source, staged.stagingDir, directory);
   saveRecord(context, name, {
     ...record,
-    commit,
+    ...sourceRecord(source, staged.revision),
     updatedAt: (context.now?.() ?? new Date()).toISOString(),
   });
 
   return {
     name,
+    displayName: source.kind === "npm" ? source.packageName : name,
     directory,
-    commit,
-    previousCommit: record.commit,
+    commit: staged.commit,
+    revision: staged.revision,
+    previousCommit,
+    previousRevision,
     changed: true,
     version: readInstalledVersion(directory),
     ...(dependencyWarning !== undefined ? { dependencyWarning } : {}),
   };
 }
 
+/** Resolve a stored directory name or npm package alias without changing existing Git names. */
+function resolveManagedName(records: Record<string, ExtensionInstallRecord>, requested: string) {
+  if (Object.hasOwn(records, requested)) return requested;
+  const packageName = requested.startsWith("npm:") ? requested.slice(4) : requested;
+  const entry = Object.entries(records).find(
+    ([, record]) => record.kind === "npm" && record.packageName === packageName,
+  );
+  if (entry) return entry[0];
+
+  throw new HunkUserError(`"${requested}" is not a managed install.`, [
+    "Run `hunk extension list` to see managed installs.",
+  ]);
+}
+
 /** Remove one managed install's directory and record. */
 export function removeExtension(context: ExtensionManageContext, name: string) {
   const records = readInstallRecords(context.installedRoot);
-  const record = records[name];
-  if (!record) {
-    throw new HunkUserError(`"${name}" is not a managed install.`, [
-      "Run `hunk extension list` to see managed installs.",
-    ]);
-  }
+  name = resolveManagedName(records, name);
 
   rmSync(join(context.installedRoot, name), { recursive: true, force: true });
   const { [name]: _removed, ...remaining } = records;

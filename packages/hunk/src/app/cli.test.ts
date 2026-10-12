@@ -2639,7 +2639,8 @@ describe("parseCli extension management commands", () => {
     expect(parsed.kind).toBe("help");
     if (parsed.kind === "help") {
       expect(parsed.text).toContain("hunk extension install <source>");
-      expect(parsed.text).toContain("only install repositories you trust");
+      expect(parsed.text).toContain("only install sources you trust");
+      expect(parsed.text).toContain("npm:<package>");
       expect(parsed.text).toContain("hunk-extension");
     }
 

@@ -69,20 +69,28 @@ Ids start with a letter or digit, then letters, digits, `-`, or `_`. `hunk`, `gi
 
 ## Installing shared extensions
 
-Extensions are shared as plain git repositories. `hunk extension install` clones one into a managed directory under `~/.config/hunk/extensions/installed/`, verifies it contains an extension, installs its npm dependencies when it declares any, and records the source and commit:
+Extensions are shared as Git repositories or npm packages. `hunk extension install` installs either source under `~/.config/hunk/extensions/installed/`, validates its entries, and records the requested source and resolved commit or package version:
 
 ```bash
 hunk extension install acme/hunk-word-diff          # GitHub shorthand
 hunk extension install acme/hunk-word-diff@v1.2.0   # pin a tag, branch, or commit
 hunk extension install git:codeberg.org/acme/ext    # any host; https:// is assumed
 hunk extension install ~/dev/hunk-word-diff         # a local checkout, for testing
+hunk extension install npm:@acme/hunk-word-diff
+hunk extension install npm:@acme/hunk-word-diff@1.2.0
+hunk extension install 'npm:@acme/hunk-word-diff@^1.2.0'
+hunk extension install npm:@acme/hunk-word-diff@next
 ```
 
 - `hunk extension list` shows every managed install with its version, commit, and source.
-- `hunk extension update [name]` re-clones one install (or all of them) from its recorded source; an `@ref` pin stays put until you re-install with a different one.
+- `hunk extension update [name]` refreshes one install (or all of them) from its recorded source. Git refs and exact npm versions stay pinned; npm ranges and tags are re-resolved.
 - `hunk extension remove <name>` deletes the install and its record. Hand-copied extensions in `~/.config/hunk/extensions/` are never touched.
 
-Installing is the consent step: extensions run with your full user permissions, so a fresh install asks for confirmation (or takes `--yes`) after naming the repository. Only install repositories you trust. Managed installs then load through the global group above — same precedence, no further prompts.
+Installing is the consent step: extensions run with your full user permissions, so a fresh install asks for confirmation (or takes `--yes`) after naming the source. Only install sources you trust. Managed installs then load through the global group above — same precedence, no further prompts.
+
+npm installs require Node.js/npm on PATH, honor registry/auth configuration from the launch project's `.npmrc`, user/global configuration, and environment, and isolate each package's dependencies. Project credentials are forwarded during acquisition, not saved into the managed install. Hunk forces local managed installation even when npm is configured globally. Hoisted helpers receive the same host APIs and React instance as the entry. Lifecycle scripts and automatic peer installation are disabled. If npm attempts a hook despite suppression, Hunk blocks it and fails the staged install. Ship ready-to-load files; packages requiring install-time builds are not supported automatically.
+
+Use `npm:<package>` from `list` to update or remove npm packages, for example `hunk extension update npm:@acme/hunk-word-diff`. npm install directories and single-entry extension IDs contain a readable package prefix plus its SHA-256 digest; this keeps scoped names distinct and IDs stable across versions. Multi-entry packages retain entry-derived IDs. Failed installs or updates do not replace the previous working directory.
 
 Community extensions are listed at [hunk.dev/extensions](/extensions/), and the full tail is the [`hunk-extension` topic on GitHub](https://github.com/topics/hunk-extension).
 
@@ -94,6 +102,8 @@ A publishable extension repository is the folder-extension layout at the reposit
 2. Keep `dependencies` real: they are installed into the extension's own `node_modules` at install time. `react`, `@opentui/*`, and `hunkdiff/extension` come from the host at runtime and belong in `devDependencies`.
 3. Tag releases so users can pin with `@v1.2.0`.
 4. Push to any git host and add the **`hunk-extension`** GitHub topic, then open a pull request to list it on [hunk.dev/extensions](/extensions/).
+
+To publish on npm, explicitly declare `hunk.extensions`, ensure every entry is a file inside the package, check shipped files with `npm pack --dry-run`, and run `npm publish`. Host-provided packages belong in peer or development dependencies, not runtime dependencies.
 
 Test the exact layout users will get with `hunk extension install /path/to/checkout`, or load it for one run with `hunk diff --extension /path/to/checkout`.
 

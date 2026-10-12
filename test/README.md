@@ -7,7 +7,7 @@ that cross module, process, repository, runtime, or terminal boundaries.
 
 ```text
 test/
-  helpers/                 shared test-only builders and fixtures
+  helpers/                 shared test-only builders, fixtures, and colocated helper tests
   fixtures/                runtime-neutral cross-process fixtures
   cli/                     black-box CLI contracts
   session/                 daemon, broker, and session CLI flows
@@ -33,16 +33,27 @@ test/
 
 ## Commands and coverage
 
-| Command                              | Coverage                                                                                                               |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| `bun run test`                       | `packages/`, `scripts/`, `examples/`, `test/cli/`, and `test/session/`, as defined by `scripts/test/run-test-suite.ts` |
-| `bun run test:windows`               | Windows platform, process, VCS, CLI, and packaging coverage; Linux owns the terminal UI semantic suite                 |
-| `bun test ./test/review-conformance` | Shared review fixtures and registered consumer projections                                                             |
-| `bun run test:session-broker-node`   | Real Node listener/adapter conformance using the checked-in cross-runtime fixtures                                     |
-| `bun run test:integration`           | PTY-backed tests under `test/pty/`                                                                                     |
-| `bun run test:tty-smoke`             | Opt-in real-TTY smoke tests under `test/smoke/`                                                                        |
-| `bun run test:install-vm`            | Opt-in Firecracker install compatibility scenarios under `test/cli/install-vm/`                                        |
-| `bun run vm:shell [-- --with-hunk]`  | Disposable Ubuntu Firecracker shell, optionally with a fresh local Hunk build                                          |
+| Command                              | Coverage                                                                                                                                |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `bun run test`                       | `packages/`, `scripts/`, `examples/`, `test/cli/`, `test/helpers/`, and `test/session/`, as defined by `scripts/test/run-test-suite.ts` |
+| `bun run test:windows`               | Windows platform, process, VCS, CLI, and packaging coverage; Linux owns the terminal UI semantic suite                                  |
+| `bun test ./test/review-conformance` | Shared review fixtures and registered consumer projections                                                                              |
+| `bun run test:session-broker-node`   | Real Node listener/adapter conformance using the checked-in cross-runtime fixtures                                                      |
+| `bun run test:integration`           | PTY-backed tests under `test/pty/`                                                                                                      |
+| `bun run test:tty-smoke`             | Opt-in real-TTY smoke tests under `test/smoke/`                                                                                         |
+| `bun run test:install-vm`            | Opt-in Firecracker install compatibility scenarios under `test/cli/install-vm/`                                                         |
+| `bun run vm:shell [-- --with-hunk]`  | Disposable Ubuntu Firecracker shell, optionally with a fresh local Hunk build                                                           |
+
+npm extension installation tests require npm/Node.js and use a disposable loopback registry
+with real tarballs, not public npm. To exercise both the source CLI and a compiled binary:
+
+```sh
+bun run build:bin
+HUNK_TEST_BINARY="$PWD/dist/hunk" bun test test/cli/npm-extension-install.test.ts
+```
+
+`HUNK_TEST_BINARY` is optional; the source CLI case runs in the default suite. On Windows,
+set that environment variable to the absolute path of `dist/hunk.exe` before running Bun.
 
 The dedicated trees are not selected directly by `bun run test`, though package tests import some
 shared runtime fixtures. Run the commands that match the changed behavior; omission from the default

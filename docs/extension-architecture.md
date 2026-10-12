@@ -50,6 +50,42 @@ unsplittable), and the later of two sources claiming one id; each refusal is a
 load issue and costs only that extension. The rules themselves are stated in
 `packages/hunk/src/extensions/extensionIds.ts`.
 
+## Managed Git and npm installation
+
+`extensions/manage/source.ts` parses Git/local-checkout and npm specifications;
+`install.ts` owns staging, validation, promotion/rollback, and management operations
+for both backends. Existing untagged install records normalize as Git records.
+Git acquisition retains clone/ref and dependency behavior. `manage/npm.ts` invokes
+npm with scripts and automatic peer installation disabled, leaving registry,
+authentication, integrity checks, and dependency resolution to the package manager.
+npm locates the launch project's configuration with `npm prefix`; a temporary staging
+`.npmrc` preserves project/user/environment precedence while install runs from the
+launch directory to preserve relative configuration paths. The copy is removed before
+validation or promotion, including failed acquisitions, so project credentials are not
+persisted in the workspace.
+Local-mode and safety policy apply through both CLI flags and case/separator-normalized npm
+environment configuration so child npm processes cannot inherit conflicting settings.
+A randomized, non-existent script-shell path fails closed if npm attempts a hook
+anyway; this covers Git `prepare` behavior in npm versions that ignore suppression.
+
+Each npm install owns an isolated workspace containing its package and dependencies
+in their normal `node_modules` layout. A generated workspace-root `hunk` manifest
+points to the installed package's validated entries and retains its API requirement,
+so `discovery.ts` needs no registry-specific semantics and never scans dependencies.
+The runtime source hook uses Bun's compiler to preserve CommonJS exports as ESM when
+helpers require host modules; compiler-generated host require calls become static
+virtual imports so their lazy factories settle before helper evaluation. Dependencies
+stay external rather than being bundled into a parallel module graph.
+`manage/workspace.ts` recognizes package entries owned by npm records, including
+aliased paths; `hostRuntimeModules.ts` scopes host-import rewriting to their complete
+isolated module workspace so hoisted helpers can consume host peers. Neighboring
+installs, unrecorded folders, and Git source scopes are not widened.
+The single-entry ID derives from a bounded package-name prefix and full SHA-256;
+multiple entries follow existing manifest identity/order rules. CLI package aliases
+resolve to that storage name; updates persist the requested selector and resolved
+version separately. npm acquisition and validation failures clean staging and leave
+the previous directory and record untouched.
+
 ## One registry model, separate composition paths
 
 Registrations (session behavior, themes, file languages, VCS adapters,

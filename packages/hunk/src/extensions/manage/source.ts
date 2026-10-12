@@ -1,16 +1,13 @@
+import { createHash } from "node:crypto";
 import { isAbsolute, resolve } from "node:path";
 import { expandHomePath } from "../discovery";
 import { EXTENSION_ID_RULE, isValidExtensionId } from "../extensionIds";
 
-/**
- * One parsed `hunk extension install` source.
- *
- * The spec grammar is deliberately git-shaped rather than registry-shaped:
- * extensions are shared as plain git repositories, so every form normalizes to
- * a clone URL plus an optional ref, and the repository name doubles as the
- * managed install's directory — and therefore extension id — on disk.
+/** Describe a Git install, including local checkouts cloned into managed storage.
+ * Keep the repository name as its directory and single-entry extension ID.
  */
-export interface ExtensionInstallSource {
+export interface GitExtensionInstallSource {
+  kind: "git";
   /** The spec exactly as the user typed it, kept for records and messages. */
   spec: string;
   /** URL (or local path) handed to `git clone`. */
@@ -19,6 +16,52 @@ export interface ExtensionInstallSource {
   ref?: string;
   /** Repository name; the install directory and extension id namespace. */
   name: string;
+}
+
+/** Describe a registry package independently of the version currently installed. */
+export interface NpmExtensionInstallSource {
+  kind: "npm";
+  spec: string;
+  packageName: string;
+  selector?: string;
+  /** Stable filesystem-safe install name, independent of the version selector. */
+  name: string;
+}
+
+export type ExtensionInstallSource = GitExtensionInstallSource | NpmExtensionInstallSource;
+
+/** Derive a bounded, scoped-package-safe identity without losing punctuation distinctions. */
+export function npmInstallName(packageName: string) {
+  const readable = packageName
+    .replace(/[^a-z0-9-]/g, "-")
+    .replace(/^-+/, "")
+    .slice(0, 40);
+  return `npm-${readable}-${createHash("sha256").update(packageName).digest("hex")}`;
+}
+
+/** Parse registry package names and selectors without admitting URLs or local package specs. */
+function parseNpmSource(spec: string): NpmExtensionInstallSource {
+  const match = /^npm:((?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*)(?:@([^@]+))?$/.exec(spec);
+  const packageName = match?.[1];
+  const selector = match?.[2];
+  if (
+    !packageName ||
+    packageName.length > 214 ||
+    (selector !== undefined &&
+      (!/^[a-zA-Z0-9.*^~<>=|+ _!()'-]+$/.test(selector) || selector.trim() !== selector))
+  ) {
+    throw new Error(
+      `Invalid npm install source "${spec}". Use npm:package, npm:@scope/package, or append @version, @range, or @tag.`,
+    );
+  }
+
+  return {
+    kind: "npm",
+    spec,
+    packageName,
+    ...(selector !== undefined ? { selector } : {}),
+    name: npmInstallName(packageName),
+  };
 }
 
 /** Match `owner/repo` shorthand: exactly two path segments, no scheme or host. */
@@ -82,7 +125,7 @@ function deriveRepositoryName(location: string) {
 }
 
 /**
- * Parse one install source spec into a clone URL, optional ref, and name.
+ * Parse one install source into its Git or npm acquisition inputs.
  *
  * Accepted forms, in the spirit of `pi install git:...` and
  * `herdr plugin install owner/repo`:
@@ -92,12 +135,17 @@ function deriveRepositoryName(location: string) {
  * - `https://...`, `ssh://...`, `git@host:path` — passed to git verbatim
  * - a local path — mostly useful for testing an extension before publishing
  *
- * Every form takes an optional `@ref` suffix naming a branch, tag, or commit.
+ * Git forms take an optional `@ref` suffix naming a branch, tag, or commit.
+ * `npm:package` and `npm:@scope/package` take optional versions, ranges, or tags.
  */
 export function parseExtensionInstallSource(spec: string): ExtensionInstallSource {
   const trimmed = spec.trim();
   if (trimmed.length === 0) {
     throw new Error("Install source must not be empty.");
+  }
+
+  if (trimmed.startsWith("npm:")) {
+    return parseNpmSource(trimmed);
   }
 
   // `git:` marks "the rest is a clone location"; it is a spec prefix, not a
@@ -139,6 +187,6 @@ export function parseExtensionInstallSource(spec: string): ExtensionInstallSourc
   }
 
   return ref !== undefined
-    ? { spec: trimmed, cloneUrl, ref, name }
-    : { spec: trimmed, cloneUrl, name };
+    ? { kind: "git", spec: trimmed, cloneUrl, ref, name }
+    : { kind: "git", spec: trimmed, cloneUrl, name };
 }

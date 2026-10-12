@@ -170,8 +170,10 @@ export default function (hunk) {
           } catch {
             if (child.exitCode === null) child.kill("SIGKILL");
           }
-          await Promise.race([child.exited, Bun.sleep(500)]);
-          expect(child.exitCode).not.toBeNull();
+          const exit = await Promise.race([child.exited, Bun.sleep(500)]);
+          // Signal exits leave exitCode null; the settled exit promise also proves
+          // that a forced SIGKILL terminated and reaped the child.
+          expect(exit).toBeNumber();
         }
       } finally {
         terminal?.close();

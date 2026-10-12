@@ -14,9 +14,23 @@
 import { availableParallelism } from "node:os";
 
 export const TEST_PATTERN_GROUPS = {
-  default: ["./packages", "./scripts", "./examples", "./test/cli", "./test/session"],
+  default: [
+    "./packages",
+    "./scripts",
+    "./examples",
+    "./test/cli",
+    "./test/helpers",
+    "./test/session",
+  ],
   integration: ["./test/pty"],
-  windows: ["./packages", "./scripts", "./examples", "./test/cli", "./test/session"],
+  windows: [
+    "./packages",
+    "./scripts",
+    "./examples",
+    "./test/cli",
+    "./test/helpers",
+    "./test/session",
+  ],
   "windows-ui": [
     "./packages/hunk/src/ui/diff/worker/highlightWorkerClient.test.ts",
     "./packages/hunk/src/ui/lib/openInEditor.test.ts",

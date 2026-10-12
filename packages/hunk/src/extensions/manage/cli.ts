@@ -30,6 +30,11 @@ function shortCommit(commit: string) {
   return commit.slice(0, 7);
 }
 
+/** Display a Git commit or npm version without shortening package versions. */
+function formatRevision(revision: string, commit?: string) {
+  return commit ? shortCommit(commit) : `v${revision}`;
+}
+
 /** Phrase one recorded source with its pinned ref, when it has one. */
 function describeSource(source: string, ref: string | undefined) {
   return ref !== undefined ? `${source} @ ${ref}` : source;
@@ -63,22 +68,29 @@ export async function runExtensionManageCommand(
   const context: ExtensionManageContext = {
     installedRoot: requireInstalledRoot(env),
     log: (line) => io.stderr(`${line}\n`),
+    env,
+    cwd: process.cwd(),
   };
 
   if (input.action === "install") {
     const source = parseExtensionInstallSource(input.source);
+    const description =
+      source.kind === "npm" ? source.spec : describeSource(source.cloneUrl, source.ref);
 
     if (!input.yes) {
       if (!io.confirm) {
         throw new HunkUserError(
           "Installing an extension needs a confirmation, and there is no terminal to ask on.",
-          [`Re-run with --yes after reviewing ${source.cloneUrl}.`],
+          [`Re-run with --yes after reviewing ${description}.`],
         );
       }
 
       io.stdout(
-        `Install ${describeSource(source.cloneUrl, source.ref)}?\n` +
-          "Extensions run with your full user permissions. Only install repositories you trust.\n",
+        `Install ${description}?\n` +
+          "Extensions run with your full user permissions. Only install sources you trust.\n" +
+          (source.kind === "npm"
+            ? "npm lifecycle scripts will not run during installation.\n"
+            : ""),
       );
       if (!(await io.confirm("Proceed? [y/N] "))) {
         io.stdout("Install cancelled.\n");
@@ -88,7 +100,7 @@ export async function runExtensionManageCommand(
 
     const outcome = installExtension(context, source);
     io.stdout(
-      `Installed ${outcome.name}${outcome.version ? ` v${outcome.version}` : ""} at ${shortCommit(outcome.commit)} into ${outcome.directory}.\n`,
+      `Installed ${outcome.displayName}${outcome.version ? ` v${outcome.version}` : ""} ${outcome.commit ? `at ${shortCommit(outcome.commit)} ` : ""}into ${outcome.directory}.\n`,
     );
     if (outcome.dependencyWarning) {
       io.stderr(`warning: ${outcome.dependencyWarning}\n`);
@@ -101,19 +113,26 @@ export async function runExtensionManageCommand(
     const entries = listExtensions(context);
     if (entries.length === 0) {
       io.stdout(
-        "No managed extension installs.\nInstall one with `hunk extension install <owner>/<repo>`.\n",
+        "No managed extension installs.\nInstall one with `hunk extension install <source>`. Sources include owner/repo and npm:<package>.\n",
       );
       return 0;
     }
 
     for (const entry of entries) {
-      const version = entry.version ? `v${entry.version}` : shortCommit(entry.record.commit);
+      const version = entry.version
+        ? `v${entry.version}`
+        : entry.record.kind === "npm"
+          ? `v${entry.record.version}`
+          : shortCommit(entry.record.commit);
+      const name = entry.record.kind === "npm" ? `npm:${entry.record.packageName}` : entry.name;
+      const source =
+        entry.record.kind === "npm"
+          ? entry.record.source
+          : describeSource(entry.record.cloneUrl, entry.record.ref);
       const missing = entry.present ? "" : " (missing on disk — reinstall or remove)";
       // The clone URL plus ref, not the raw spec: a spec like `acme/x@v1`
       // already embeds the ref, and printing both would repeat it.
-      io.stdout(
-        `${entry.name}  ${version}  ${describeSource(entry.record.cloneUrl, entry.record.ref)}${missing}\n`,
-      );
+      io.stdout(`${name}  ${version}  ${source}${missing}\n`);
     }
     return 0;
   }
@@ -130,8 +149,8 @@ export async function runExtensionManageCommand(
       const outcome = updateExtension(context, name);
       io.stdout(
         outcome.changed
-          ? `Updated ${outcome.name}${outcome.version ? ` to v${outcome.version}` : ""}: ${shortCommit(outcome.previousCommit)} -> ${shortCommit(outcome.commit)}.\n`
-          : `${outcome.name} is already up to date (${shortCommit(outcome.commit)}).\n`,
+          ? `Updated ${outcome.displayName}${outcome.version ? ` to v${outcome.version}` : ""}: ${formatRevision(outcome.previousRevision, outcome.previousCommit)} -> ${formatRevision(outcome.revision, outcome.commit)}.\n`
+          : `${outcome.displayName} is already up to date (${formatRevision(outcome.revision, outcome.commit)}).\n`,
       );
       if (outcome.dependencyWarning) {
         io.stderr(`warning: ${outcome.dependencyWarning}\n`);

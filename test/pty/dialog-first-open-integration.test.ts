@@ -190,8 +190,10 @@ for (const overlay of overlays) {
               } catch {
                 if (child.exitCode === null) child.kill("SIGKILL");
               }
-              await Promise.race([child.exited, Bun.sleep(500)]);
-              expect(child.exitCode).not.toBeNull();
+              const exit = await Promise.race([child.exited, Bun.sleep(500)]);
+              // Signal exits leave exitCode null; await termination rather than
+              // requiring the child to finish with a normal exit status.
+              expect(exit).toBeNumber();
             }
           } finally {
             terminal?.close();

@@ -89,8 +89,7 @@ describe("managed extension installs", () => {
     expect(existsSync(join(outcome.directory, "index.ts"))).toBe(true);
 
     const records = readInstallRecords(context.installedRoot);
-    expect(records["word-diff"]?.cloneUrl).toBe(repo);
-    expect(records["word-diff"]?.commit).toBe(outcome.commit);
+    expect(records["word-diff"]).toMatchObject({ cloneUrl: repo, commit: outcome.commit });
 
     // Discovery picks the install up through the global group, one level below
     // the global extensions dir.
@@ -115,7 +114,7 @@ describe("managed extension installs", () => {
     const context = createTestContext();
 
     const outcome = installExtension(context, parseExtensionInstallSource(`${repo}@v1`));
-    expect(readInstallRecords(context.installedRoot)["pinned-ext"]?.ref).toBe("v1");
+    expect(readInstallRecords(context.installedRoot)["pinned-ext"]).toMatchObject({ ref: "v1" });
 
     // A new commit on the default branch must not move a tag-pinned install.
     writeFileSync(join(repo, "extra.ts"), "export const later = true;\n");
@@ -148,7 +147,9 @@ describe("managed extension installs", () => {
     expect(update.previousCommit).toBe(installed.commit);
     expect(update.commit).not.toBe(installed.commit);
     expect(update.version).toBe("1.1.0");
-    expect(readInstallRecords(context.installedRoot)["tracking-ext"]?.commit).toBe(update.commit);
+    expect(readInstallRecords(context.installedRoot)["tracking-ext"]).toMatchObject({
+      commit: update.commit,
+    });
   });
 
   test("refuses a repository that contains no extension", () => {

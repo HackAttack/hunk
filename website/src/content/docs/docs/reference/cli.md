@@ -229,7 +229,7 @@ hunk skill path [name]
 
 ## `hunk extension install`
 
-install a shared extension from a git repository
+install a shared extension from Git or npm
 
 ### Usage
 
@@ -237,6 +237,7 @@ install a shared extension from a git repository
 hunk extension install <owner>/<repo>[@ref]
 hunk extension install git:<host>/<path>[@ref]
 hunk extension install <git-url or local path>[@ref]
+hunk extension install npm:<package>[@version-or-range-or-tag]
 ```
 
 **Aliases:** `hunk ext install`.
@@ -261,7 +262,7 @@ hunk extension list
 
 ## `hunk extension update`
 
-re-clone managed extension installs from their recorded sources
+update managed extension installs from their recorded sources
 
 ### Usage
 
