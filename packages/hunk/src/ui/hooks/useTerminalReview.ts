@@ -119,6 +119,7 @@ import {
   storedDraftToDraftNote,
   storedNoteToLiveComment,
   storedNoteToUserNote,
+  storedReviewNoteTarget,
   type DraftReviewNote,
   type UserReviewNote,
 } from "../lib/reviewNoteMapping";
@@ -565,7 +566,7 @@ export function useTerminalReview({
   // Which files and hunks carry notes, for the shared annotated-navigation planner. Built
   // from the merged stream, so a live comment that just arrived is navigable immediately.
   const annotations = useMemo(
-    () => buildReviewAnnotationIndex(allFiles, keyByFileId),
+    () => buildReviewAnnotationIndex(allFiles, keyByFileId, storedReviewNoteTarget),
     [allFiles, keyByFileId],
   );
   const projectedNavigationFiles = useMemo<ReviewNavigationFile[]>(
