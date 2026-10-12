@@ -13,8 +13,8 @@ function bundledMetadata(id: string) {
 }
 
 describe("runExtensionFactory", () => {
-  test("advertises transient presentation scopes through extension API v30", () => {
-    expect(HUNK_EXTENSION_API_VERSION).toBe(30);
+  test("advertises workspace status through extension API v31", () => {
+    expect(HUNK_EXTENSION_API_VERSION).toBe(31);
   });
 
   test("applies a synchronous factory before returning, with nothing to await", () => {

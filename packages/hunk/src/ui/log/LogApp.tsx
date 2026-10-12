@@ -2,6 +2,7 @@ import type { KeyEvent, MouseEvent as TuiMouseEvent } from "@opentui/core";
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react";
 import { basename } from "node:path";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { STATUS_COMMAND_NAMES } from "../../core/run/statusCommandCatalog";
 import { APP_COMMAND_NAMES } from "../../core/run/commandCatalog";
 import { DOCUMENT_COMMAND_NAMES } from "../../core/run/documentCommandCatalog";
 import type { PersistedViewPreferences } from "../../core/run/config";
@@ -83,6 +84,8 @@ export function LogApp({
   themeController,
   useColor,
   quitScheduler,
+  returnToStatus = false,
+  transparentBackground = false,
 }: {
   controller: LogController;
   runtime: InteractiveHistoryRuntime;
@@ -92,6 +95,9 @@ export function LogApp({
   themeController: ThemeController;
   useColor: boolean;
   quitScheduler?: ViewPreferenceQuitScheduler;
+  returnToStatus?: boolean;
+  /** Retain the caller's resolved surface preference without changing the shared palette. */
+  transparentBackground?: boolean;
 }) {
   const snapshot = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   const terminal = useTerminalDimensions();
@@ -115,7 +121,7 @@ export function LogApp({
   const themeSelector = useThemeSelectorController({
     onTransientNotice: setTransientNotice,
     themeController,
-    transparentBackground: false,
+    transparentBackground,
   });
   const { store: statusLineStore, snapshot: statusLineState } = useStatusLine();
   const terminalThemeMode = renderer.themeMode ?? "dark";
@@ -143,7 +149,7 @@ export function LogApp({
     },
     configPath: runtime.viewPreferencesConfigPath,
     pagerMode: false,
-    promptSaveViewPreferences: runtime.promptSaveViewPreferences,
+    promptSaveViewPreferences: runtime.promptSaveViewPreferences && !returnToStatus,
     transientViewPreferences: resolveExtensionSessionOptions(
       runtime.extensionSession.current.registry,
     ).transientViewPreferences,
@@ -264,7 +270,11 @@ export function LogApp({
     await openSelected(undefined, true);
   };
   const inactiveHistoryCommandNames = useMemo(() => {
-    const names = new Set([...APP_COMMAND_NAMES, ...DOCUMENT_COMMAND_NAMES]);
+    const names = new Set([
+      ...APP_COMMAND_NAMES,
+      ...DOCUMENT_COMMAND_NAMES,
+      ...STATUS_COMMAND_NAMES,
+    ]);
     for (const registered of buildSessionCommands(runtime.extensionSession.current.registry)) {
       names.add(`${registered.extensionId}.${registered.command.id}`);
     }
@@ -361,7 +371,7 @@ export function LogApp({
     return {
       kind: "item",
       commandId: id,
-      label: definition.title,
+      label: id === "hunk.app.quit" && returnToStatus ? "Back to status" : definition.title,
       ...(command.keyLabels.length ? { hint: command.keyLabels.join(" / ") } : {}),
       disabled: command.isEnabled ? !command.isEnabled() : false,
       action: () => executeCommand(id),

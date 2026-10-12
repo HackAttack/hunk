@@ -14,9 +14,11 @@ import type {
   HunkSessionSnapshot,
 } from "../session/types";
 import { ThemeController } from "./theme/controller";
+import type { CommonOptions } from "../core/run/commandInputs";
 
 const { getBundledVcsCatalog } = await import("../app/vcsCatalog");
 const { loadAppBootstrap } = await import("../core/changeset/loaders");
+const { loadStatusBootstrap } = await import("../app/statusBootstrap");
 const { TestAppHost: AppHost } = await import("../../../../test/helpers/app-host");
 
 /** Stand in for the session daemon so a test can send the commands agents send. */
@@ -212,6 +214,151 @@ describe("reload theme catalog", () => {
       });
     } finally {
       await act(async () => setup.renderer.destroy());
+      await removeTestDirectory(dir);
+    }
+  });
+});
+
+describe("status-owned reload configuration", () => {
+  test("bare broker and manual reloads keep launch authority, effective overrides and live preferences", async () => {
+    const { configPath, dir } = createReloadThemeRepository();
+    const configHome = mkdtempSync(join(tmpdir(), "hunk-status-reload-config-"));
+    const globalConfig = join(configHome, "hunk", "config.toml");
+    mkdirSync(join(configHome, "hunk"));
+    writeFileSync(
+      globalConfig,
+      'prompt_save_view_preferences = false\n\n[keybindings]\n"hunk.view.toggleLineNumbers" = "ctrl+n"\n',
+    );
+    writeFileSync(configPath, '[themes.launch-palette]\naccent = "#123456"\n');
+    const sourceCwd = join(dir, "source");
+    mkdirSync(sourceCwd);
+    const status = await loadStatusBootstrap({
+      input: {
+        kind: "status",
+        static: false,
+        json: false,
+        color: "always",
+        options: {
+          vcs: "git",
+          extensions: false,
+          experimental: true,
+          mode: "unified",
+          theme: "launch-palette",
+          transparentBackground: true,
+          excludeUntracked: true,
+          tabWidth: 7,
+          fileGap: 3,
+        },
+      },
+      cwd: dir,
+      env: { ...process.env, XDG_CONFIG_HOME: configHome },
+      baseVcsCatalog: getBundledVcsCatalog(),
+    });
+    const bootstrap = await status.prepareReview(
+      { kind: "vcs", staged: false, options: { excludeUntracked: false } },
+      dir,
+    );
+    const published: (typeof bootstrap)[] = [];
+    const clientOptions: { replaceSessionError?: Error } = {};
+    const { dispatchCommand, hostClient } = createTestHostClient(clientOptions);
+    const themeController = new ThemeController(status.initialization.theme);
+    const setup = await testRender(
+      <AppHost
+        bootstrap={bootstrap}
+        extensionSession={status.extensionSession}
+        extensionOwnership="borrowed"
+        retainLaunchConfig
+        sessionCustomThemes={status.initialization.theme.customThemes}
+        hostClient={hostClient}
+        themeController={themeController}
+        onActiveBootstrapChange={(active) => published.push(active as typeof bootstrap)}
+      />,
+      { width: 120, height: 20 },
+    );
+    /** Reload through the real broker bridge, optionally changing source cwd or effective options. */
+    const reload = (options: CommonOptions = {}, sourcePath?: string) =>
+      dispatchCommand({
+        type: "command",
+        requestId: `status-reload-${published.length}`,
+        command: "reload_session",
+        input: {
+          sessionId: "session-1",
+          nextInput: { kind: "vcs", staged: false, options },
+          ...(sourcePath ? { sourcePath } : {}),
+        },
+      });
+    try {
+      await flush(setup);
+      await act(async () => setup.mockInput.pressKey("n", { ctrl: true }));
+      await flush(setup);
+      // Neither changed user config nor the source repository can replace launch policy.
+      writeFileSync(globalConfig, '[keybindings]\n"hunk.view.toggleLineNumbers" = false\n');
+      writeFileSync(
+        configPath,
+        'tab_width = 2\ntransparent_background = false\nexclude_untracked = true\n\n[themes.foreign]\naccent = "#abcdef"\n',
+      );
+      await reload(
+        { tabWidth: undefined, theme: undefined, transparentBackground: undefined },
+        sourceCwd,
+      );
+      await flush(setup);
+      const active = published.at(-1)!;
+      expect(active.reloadContext.cwd).toBe(sourceCwd);
+      expect(active.input.options).toMatchObject({
+        experimental: true,
+        transparentBackground: true,
+        excludeUntracked: false,
+        tabWidth: 7,
+        fileGap: 3,
+        lineNumbers: false,
+        theme: "launch-palette",
+      });
+      expect(active.keybindings).toEqual(bootstrap.keybindings);
+      expect(active.viewPreferencesConfigPath).toBe(bootstrap.viewPreferencesConfigPath);
+      expect(themeController.getSnapshot().customThemes).toEqual(bootstrap.customThemes ?? []);
+      expect(status.launchOptions.excludeUntracked).toBe(true);
+      expect(setup.captureCharFrame()).toContain("changed line");
+      await act(async () => setup.mockInput.pressKey("r"));
+      for (let attempt = 0; attempt < 30 && published.at(-1) === active; attempt++) {
+        await flush(setup);
+        await Bun.sleep(10);
+      }
+      expect(published.at(-1)).not.toBe(active);
+      expect(published.at(-1)!.input.options.excludeUntracked).toBe(false);
+      await reload({ excludeUntracked: true, tabWidth: 5 });
+      await flush(setup);
+      await reload();
+      await flush(setup);
+      expect(published.at(-1)!.input.options).toMatchObject({
+        excludeUntracked: true,
+        tabWidth: 5,
+        lineNumbers: false,
+        transparentBackground: true,
+        experimental: true,
+      });
+      // The retained launch keybinding still controls the mounted App after reload.
+      await act(async () => setup.mockInput.pressKey("n", { ctrl: true }));
+      await flush(setup);
+      await reload();
+      await flush(setup);
+      expect(published.at(-1)!.initialShowLineNumbers).toBe(true);
+      const committed = published.at(-1)!;
+      clientOptions.replaceSessionError = new Error("routed publication rejected");
+      await expect(reload({ tabWidth: 2, lineNumbers: true })).rejects.toThrow(
+        "routed publication rejected",
+      );
+      await flush(setup);
+      expect(published.at(-1)).toBe(committed);
+      expect(themeController.getSnapshot().customThemes).toEqual(bootstrap.customThemes ?? []);
+      clientOptions.replaceSessionError = undefined;
+      await reload();
+      await flush(setup);
+      expect(published.at(-1)!.input.options.tabWidth).toBe(5);
+    } finally {
+      await act(async () => setup.renderer.destroy());
+      await status.close();
+      await status.extensionSession.shutdown();
+      await removeTestDirectory(configHome);
       await removeTestDirectory(dir);
     }
   });

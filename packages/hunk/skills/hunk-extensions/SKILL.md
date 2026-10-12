@@ -99,27 +99,28 @@ for all user extensions. Bundled capabilities use separate host-owned selection 
 
 ## Pick the touchpoint
 
-| To do this                                               | Call                                         |
-| -------------------------------------------------------- | -------------------------------------------- |
-| Keep demo/training view settings temporary               | `hunk.configureSession(options)`             |
-| Add a selectable color theme                             | `hunk.registerTheme(theme)`                  |
-| Highlight an extension, exact filename, or filename glob | `hunk.registerFileLanguage(matcher, lang)`   |
-| Support another VCS (`git`/`jj`/`sl` are reserved)       | `hunk.registerVcsAdapter(adapter)`           |
-| Add a navigation/list/status pane beside the review      | `hunk.registerPane(pane)`                    |
-| Present a file as something other than a raw diff        | `hunk.registerFileView(view)` (experimental) |
-| Mark character ranges inside diff lines                  | `hunk.registerLineHighlighter(highlighter)`  |
-| Interpret review keys as a temporary global mode         | `hunk.registerKeyboardMode(mode)`            |
-| Add a generic top-level CLI command tree                 | `hunk.registerCliCommand(command, handler)`  |
-| Bind a key / add an Extensions-menu entry                | `hunk.registerCommand(command, handler)`     |
-| Show persistent text on the bottom status row            | `ctx.statusLine.set(item)` in a handler      |
-| Ask for one line of text inline, `less`-style            | `ctx.prompts.line(options)` in a command     |
-| Hide, reorder, retitle files before review               | `hunk.transformChangeset(fn)`                |
-| React to loads, selection, view movement, notes, reloads | `hunk.on(event, handler)`                    |
-| Coordinate with another loaded extension                 | `hunk.events.emit` / `hunk.events.on`        |
-| Reload after an external agent changes reviewed inputs   | `ctx.review.requestReload()` in an event     |
-| Read user-supplied settings                              | `hunk.config` (`[extension.<id>]` table)     |
-| Snapshot stable files and every saved review note        | `ctx.review.snapshot()` in a command         |
-| Branch on the API generation (currently `28`)            | `hunk.apiVersion`                            |
+| To do this                                               | Call                                                          |
+| -------------------------------------------------------- | ------------------------------------------------------------- |
+| Keep demo/training view settings temporary               | `hunk.configureSession(options)`                              |
+| Add a selectable color theme                             | `hunk.registerTheme(theme)`                                   |
+| Highlight an extension, exact filename, or filename glob | `hunk.registerFileLanguage(matcher, lang)`                    |
+| Support another VCS (`git`/`jj`/`sl` are reserved)       | `hunk.registerVcsAdapter(adapter)`                            |
+| Report read-only workspace and sibling status            | Optional `registerVcsAdapter({ status })` capability (API 31) |
+| Add a navigation/list/status pane beside the review      | `hunk.registerPane(pane)`                                     |
+| Present a file as something other than a raw diff        | `hunk.registerFileView(view)` (experimental)                  |
+| Mark character ranges inside diff lines                  | `hunk.registerLineHighlighter(highlighter)`                   |
+| Interpret review keys as a temporary global mode         | `hunk.registerKeyboardMode(mode)`                             |
+| Add a generic top-level CLI command tree                 | `hunk.registerCliCommand(command, handler)`                   |
+| Bind a key / add an Extensions-menu entry                | `hunk.registerCommand(command, handler)`                      |
+| Show persistent text on the bottom status row            | `ctx.statusLine.set(item)` in a handler                       |
+| Ask for one line of text inline, `less`-style            | `ctx.prompts.line(options)` in a command                      |
+| Hide, reorder, retitle files before review               | `hunk.transformChangeset(fn)`                                 |
+| React to loads, selection, view movement, notes, reloads | `hunk.on(event, handler)`                                     |
+| Coordinate with another loaded extension                 | `hunk.events.emit` / `hunk.events.on`                         |
+| Reload after an external agent changes reviewed inputs   | `ctx.review.requestReload()` in an event                      |
+| Read user-supplied settings                              | `hunk.config` (`[extension.<id>]` table)                      |
+| Snapshot stable files and every saved review note        | `ctx.review.snapshot()` in a command                          |
+| Branch on the API generation (currently `31`)            | `hunk.apiVersion`                                             |
 
 Registration is only valid while the factory runs — Hunk seals the API object
 afterwards.
@@ -128,6 +129,30 @@ Promise-returning VCS `watchSignature` hooks and watch cancellation require API
 version 25. Declare `{"hunk": {"apiVersion": 25}}` in the manifest, or branch on
 `hunk.apiVersion` and return signatures synchronously on older hosts. Use async
 I/O and honor `ctx.signal` on API 25; existing synchronous hooks remain supported.
+
+### Workspace status providers (API 31)
+
+The optional `registerVcsAdapter({ status })` capability offers cancellable, read-only
+`read`, `readSiblings`, and `planReview` operations, plus optional async `watchPlan`.
+Read [Workspace status capability](../../../../docs/extensions.md#workspace-status-capability)
+and the `ExtensionVcsStatusCapability` contract before implementing it.
+
+- Action ids are supported semantic ids, not opaque strings: `staged` reviews the index;
+  `unstaged` reviews the working copy. Offer each at most once with provider-owned labels.
+  A no-index provider offers only `unstaged` and omits `paths[].index`.
+- Return `{ cwd, input: ExtensionVcsStatusReviewInput }` from `planReview`. Preserve the
+  inspected target and opaque token validation. This exported type excludes pathspecs while
+  preserving exclusive `range` / `rangeEndpoints` comparisons. Any `pathspecs` field, even
+  `[]` or `undefined`, rejects; `input.staged` must match the offered action id.
+- Sibling ids and paths must each be unique and share the current `repositoryId`. If a row
+  matches the current worktree's id or path, both must match. Embedded ready sibling facts
+  and `readSiblings` results follow the same checks; unavailable/error rows never mean clean.
+- Bound collections before returning: 20,000 changed paths, 100 sibling rows, five operations,
+  256 watch targets, four sources per target, 20,000 watch roots/entries per target, and
+  40,000 aggregate collection entries per result (including nested and outer arrays).
+  Defensive action-array validation caps at 32, but only two unique ids are supported.
+  Oversized results reject before per-element schema traversal. Mark bounded sibling scans
+  `truncated`; honor `context.signal`, bound I/O, and reap subprocesses.
 
 ### Generic CLI handlers
 

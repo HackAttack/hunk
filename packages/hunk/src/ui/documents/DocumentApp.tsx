@@ -14,6 +14,7 @@ import { useTimedNotice } from "../hooks/useTimedNotice";
 import { APP_COMMAND_NAMES } from "../../core/run/commandCatalog";
 import { HISTORY_COMMAND_NAMES } from "../../core/run/historyCommandCatalog";
 import { DOCUMENT_COMMAND_CATALOG } from "../../core/run/documentCommandCatalog";
+import { STATUS_COMMAND_NAMES } from "../../core/run/statusCommandCatalog";
 import { resolveCommandKeys } from "../lib/keymap";
 import { openFileInEditor } from "../lib/openInEditor";
 import type { ThemeController } from "../theme/controller";
@@ -88,7 +89,11 @@ export function DocumentApp({
       resolveCommandKeys({
         defaults: DOCUMENT_COMMAND_CATALOG,
         userBindings: keybindings,
-        inactiveCommandNames: new Set([...APP_COMMAND_NAMES, ...HISTORY_COMMAND_NAMES]),
+        inactiveCommandNames: new Set([
+          ...APP_COMMAND_NAMES,
+          ...HISTORY_COMMAND_NAMES,
+          ...STATUS_COMMAND_NAMES,
+        ]),
       }),
     [keybindings],
   );

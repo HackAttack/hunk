@@ -33,6 +33,7 @@ import { mergeStartupNotices } from "../extensions/startup";
 import { createExtensionSession, type ExtensionSession } from "../extensions/session";
 import type { ExtensionLoadResult } from "../extensions/types";
 import { resolveConfiguredExtensions } from "./extensionBootstrap";
+import { createHistoryCursorLifecycle } from "./historyCursorLifecycle";
 
 /** Fully owned resources required by static or interactive history output. */
 export interface HistoryBootstrap {
@@ -156,7 +157,7 @@ export async function loadHistoryBootstrap({
   const initialViewPreferences = persistedViewPreferencesFromOptions(
     resolved.configured.input.options,
   );
-  let closed = false;
+  const cursor = createHistoryCursorLifecycle(source, openSource);
   return {
     input: resolvedTheme ? { ...input, theme: resolvedTheme } : input,
     source,
@@ -198,24 +199,7 @@ export async function loadHistoryBootstrap({
         return planVcsHistoryRangeReview(adapter, selection, { cwd: repoRoot, signal }, options);
       },
     }),
-    async reopenSource(signal) {
-      if (closed) throw new Error("History session is closed.");
-      signal?.throwIfAborted();
-      const previous = source;
-      const replacement = await openSource(signal);
-      if (closed || source !== previous || signal?.aborted) {
-        await replacement.close();
-        signal?.throwIfAborted();
-        throw new Error("History session changed while refreshing.");
-      }
-      source = replacement;
-      await previous.close();
-      return replacement;
-    },
-    async close() {
-      if (closed) return;
-      closed = true;
-      await source.close();
-    },
+    reopenSource: cursor.reopenSource,
+    close: cursor.close,
   };
 }

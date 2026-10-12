@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import {
   buildGitDiffArgs,
   buildGitDiffNumstatArgs,
@@ -27,6 +27,8 @@ import {
   openGitHistory,
   planGitHistoryRangeReview,
 } from "./history";
+import { createGitStatusCapability } from "./status";
+import { buildGitMetadataTargets } from "./watchTargets";
 import { gitEndpointSourceSpec, readGitFileSource } from "./source";
 import { commitReviewInfo, comparisonReviewInfo } from "@hunk/vcs/review-info";
 import {
@@ -265,26 +267,6 @@ async function createGitDiffSourceCapabilityAsync(
 /* Watch plans                                                                 */
 /* -------------------------------------------------------------------------- */
 
-/** Return whether a recursive directory target safely covers another directory. */
-function directoryContains(parent: string, child: string) {
-  const path = relative(parent, child);
-  return path === "" || (!path.startsWith("..") && !isAbsolute(path));
-}
-
-/** Build metadata targets, collapsing linked-worktree state under its common Git directory. */
-function buildGitMetadataTargets(
-  gitDir: string,
-  commonDir: string,
-): ExtensionVcsDirectoryTreeWatchTarget[] {
-  const directories = directoryContains(commonDir, gitDir) ? [commonDir] : [gitDir, commonDir];
-  return directories.map((directory) => ({
-    kind: "directory-tree",
-    directory,
-    ignoredRoots: [join(directory, "objects")],
-    sources: ["vcs-metadata"],
-  }));
-}
-
 /**
  * Build a Git watch plan whose worktree recursion matches the reviewed operation.
  *
@@ -352,6 +334,7 @@ export function createGitVcsAdapter({
     name: "Git",
     detect: detectGitRepo,
     detectionPriority: HUNK_VCS_DETECTION_BASELINE_PRIORITY,
+    status: createGitStatusCapability(gitExecutable),
     history: {
       open(input, { cwd }) {
         return openGitHistory(input, { cwd, gitExecutable });

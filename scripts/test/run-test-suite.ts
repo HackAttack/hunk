@@ -32,6 +32,8 @@ export const TEST_PATTERN_GROUPS = {
     "./test/session",
   ],
   "windows-ui": [
+    // Status planning is renderer-free and owns portable filesystem-backed refresh behavior.
+    "./packages/hunk/src/ui/status",
     "./packages/hunk/src/ui/diff/worker/highlightWorkerClient.test.ts",
     "./packages/hunk/src/ui/lib/openInEditor.test.ts",
     "./packages/hunk/src/ui/lib/workspaceWriteGuard.test.ts",

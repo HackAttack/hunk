@@ -2,6 +2,10 @@ import { expect, mock, test } from "bun:test";
 import { testRender } from "@opentui/react/test-utils";
 import { act } from "react";
 import type { UserKeyBinding } from "../../core/run/config";
+import { APP_COMMAND_NAMES } from "../../core/run/commandCatalog";
+import { DOCUMENT_COMMAND_CATALOG } from "../../core/run/documentCommandCatalog";
+import { HISTORY_COMMAND_NAMES } from "../../core/run/historyCommandCatalog";
+import { STATUS_COMMAND_NAMES } from "../../core/run/statusCommandCatalog";
 import { ThemeController } from "../theme/controller";
 import { availableThemes } from "../themes";
 import { DocumentApp } from "./DocumentApp";
@@ -85,6 +89,31 @@ async function createTestKeyboardApp(keybindings: Record<string, UserKeyBinding>
 
   return { setup, controller, themeController, edit, list, quit, burst, clickMenuItem, close };
 }
+
+test("documents ignore all inactive review/history/status names while retaining unknown-command diagnostics and active remaps", async () => {
+  const bindings: Record<string, UserKeyBinding> = {};
+  const activeNames = new Set<string>();
+  for (const entry of DOCUMENT_COMMAND_CATALOG) {
+    activeNames.add(entry.id);
+    if ("aliases" in entry) for (const alias of entry.aliases ?? []) activeNames.add(alias);
+  }
+  for (const name of [...APP_COMMAND_NAMES, ...HISTORY_COMMAND_NAMES, ...STATUS_COMMAND_NAMES]) {
+    if (!activeNames.has(name)) bindings[name] = "j";
+  }
+  bindings["hunk.documents.stepDown"] = "n";
+  bindings["hunk.unknown"] = "x";
+  const app = await createTestKeyboardApp(bindings);
+  try {
+    expect(app.setup.captureCharFrame()).toContain('unknown command "hunk.unknown"');
+    await app.burst("j");
+    expect(app.controller.getSnapshot().selectedKey).toBe("a");
+    await app.burst("n");
+    expect(app.controller.getSnapshot().selectedKey).toBe("b");
+    expect(app.quit).not.toHaveBeenCalled();
+  } finally {
+    await app.close();
+  }
+});
 
 test("content clicks dismiss menus and route the next key to the document or tree", async () => {
   const app = await createTestKeyboardApp();

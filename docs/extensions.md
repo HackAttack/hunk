@@ -346,8 +346,9 @@ and retires the replaced instance at that explicit ownership boundary.
 
 ### `hunk.apiVersion`
 
-The API generation this Hunk speaks (currently `30`). Branch on it if you want
-one file to support several Hunk versions. Version 30 adds the opaque current review generation
+The API generation this Hunk speaks (currently `31`). Branch on it if you want
+one file to support several Hunk versions. Version 31 adds optional read-only workspace status,
+sibling inspection and status review planning; version 30 adds the opaque current review generation
 in pane props; version 29 adds generation-scoped extension review presentation scopes; version 28
 adds host-owned syntax highlighting for file-view code documents;
 version 27 adds `ctx.selection.files`, the visible files in review order;
@@ -543,6 +544,66 @@ those two reserved extensions are skipped with a notice.
 
 This API selects a language already available to Pierre/Shiki. It does not load a new syntax
 grammar; an unknown language remains plain text.
+
+### Workspace status capability
+
+API version 31 adds optional `ExtensionVcsAdapter.status`, independent of `history` and
+review operations. Providers without it report unsupported for `hunk status`; detection never
+falls back from a native JJ/Sapling workspace to Git status semantics. The bundled Git provider
+implements the capability in `packages/hunk-git/src/status.ts`.
+
+- `read({ targetPath? }, context)` returns an `ExtensionVcsStatusSnapshot` with `schemaVersion: 1`.
+  `context.cwd` is the launch repository authority; a target may inspect only that repository's
+  worktrees. A missing repository/worktree rejects. No process-wide cwd change, extension loading,
+  fetch, checkout, staging or other mutation belongs in this capability.
+- `readSiblings(snapshot, context)` returns bounded same-repository summaries. Worktree ids and
+  paths must each be unique. Every row must share the inspected `repositoryId`; a row matching
+  the current worktree's id or path must match both. These checks also apply to embedded
+  `siblings: { state: "ready", value }` snapshots. Return an unavailable/error row, not zero
+  changes, when a sibling cannot be read. The initial snapshot can publish
+  `siblings: { state: "loading" }` before this slower scan completes.
+- `reviewActions` supports only the semantic ids `staged` (index comparison) and `unstaged`
+  (working-copy comparison), each at most once; ids are not opaque. Labels are provider-owned.
+  A provider without an index offers only `unstaged`, with a suitable label such as "Working
+  copy changes", and omits `paths[].index`. It need not invent Git staging semantics.
+- `planReview(snapshot, actionId, context)` revalidates source/target identity and the opaque
+  snapshot token, then returns `{ cwd, input: ExtensionVcsStatusReviewInput }` for a full
+  comparison. This exported input type retains the exclusive `range` / `rangeEndpoints`
+  variants but excludes pathspecs. The boundary explicitly rejects a `pathspecs` field, even an
+  empty list or `undefined`, rather than silently stripping it. `cwd` must retain the inspected
+  worktree path and `input.staged` must agree with the offered semantic action id. The UI passes
+  only a provider-offered id; it does not construct revision expressions or narrow the comparison
+  to a selected file. A live working tree can still change after planning; the token is not
+  content attestation.
+- Optional async `watchPlan(snapshot, context)` uses the existing watch-plan vocabulary for
+  worktree and shared/per-worktree metadata. Hosts keep periodic polling for missed events,
+  serialize/coalesce refreshes, cancel superseded reads and reject late generations.
+
+Every asynchronous operation receives `context.signal` and must honor cancellation, bound its
+I/O, and reap subprocesses. Status results allow at most 20,000 unique changed paths and 100
+sibling rows. The defensive review-action collection limit is 32, but the supported ids permit
+at most two unique actions. Ready operation arrays allow five entries. Watch plans allow 256
+targets, four sources per target, and 20,000 ignored roots or entries per target. Each result
+also has a 40,000-entry aggregate collection budget, counting nested arrays and outer rows/targets,
+and an 8 MiB aggregate UTF-8 text budget across normalized fields. The boundary preflights collection
+lengths before Zod traverses array elements and checks text before publishing copied results. Oversized results fail
+explicitly; providers returning bounded sibling lists set `truncated`. Fields marked unknown/error
+must not become clean, aligned, or zero-count results. The extension boundary validates and copies
+snapshots before publishing them. Paths retain literal Unicode, tabs and newlines for
+navigation/JSON; renderers escape control characters.
+Providers without an index omit `paths[].index` rather than inventing Git staging states.
+
+`changedPathCount` counts unique destination paths, including rename destinations and untracked
+files. A partially staged path appears once with independent index/worktree states. Submodule
+commit/tracked/untracked changes and conflicts stay explicit. No summed numstat is presented as
+a net change; detailed comparisons belong in the existing diff view.
+
+Fetch timestamps are optional facts with provenance, not observation timestamps. Git retains the
+inspected worktree's local `FETCH_HEAD` mtime with `local-fetch-head-mtime` provenance in structured
+facts: it is not authoritative for the named upstream and may describe a different remote or a
+manually modified file. Human output therefore omits age; `(last fetched 18m ago)` may appear only
+when provenance supports that claim. Hunk never fetches to populate it. Missing/unreadable metadata
+remains unknown/error. See [workspace status](status.md) for command and scan policy.
 
 ### `hunk.registerVcsAdapter(adapter)`
 
