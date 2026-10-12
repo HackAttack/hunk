@@ -340,6 +340,7 @@ export function DiffPane({
   draftNoteFocused = false,
   separatorWidth,
   pagerMode = false,
+  scrollFocused = pagerMode,
   copyDecorations = false,
   screenTop = 0,
   showTopChrome,
@@ -424,6 +425,8 @@ export function DiffPane({
   draftNoteFocused?: boolean;
   separatorWidth: number;
   pagerMode?: boolean;
+  /** Give the scrollbox keyboard focus only while the host review owns input. */
+  scrollFocused?: boolean;
   copyDecorations?: boolean;
   screenTop?: number;
   showTopChrome?: boolean;
@@ -2550,7 +2553,7 @@ export function DiffPane({
                 height="100%"
                 scrollY={true}
                 viewportCulling={true}
-                focused={pagerMode}
+                focused={scrollFocused}
                 onMouseDown={beginCopySelection}
                 onMouseDrag={updateCopySelection}
                 onMouseDragEnd={endCopySelection}

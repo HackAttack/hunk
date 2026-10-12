@@ -1700,6 +1700,7 @@ export function App({
             semanticFileIdentities={semanticFileIdentities}
             lineHighlights={paintedLineHighlights}
             pagerMode={pagerMode}
+            scrollFocused={pagerMode && focusArea === "files"}
             screenTop={diffPaneScreenTop}
             showTopChrome={showMenuBar}
             skipInitialIntermediateRender={Boolean(onFirstFrameReady)}

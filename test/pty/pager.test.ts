@@ -37,6 +37,52 @@ async function scrollWheelUntil(
 }
 
 describe("PTY pager", () => {
+  test("the file filter keeps focus when pager results remount", async () => {
+    const fixture = harness.createTwoFileRepoFixture();
+    const session = await harness.launchShellCommand({
+      command: `git diff --no-ext-diff | ${harness.buildHunkCommand(["pager", "--mode", "unified"])}; printf '\\nPAGER_EXITED\\n'`,
+      cwd: fixture.dir,
+      cols: 120,
+      rows: 24,
+    });
+
+    try {
+      await session.waitForText(/betaValue/, { timeout: 15_000 });
+      await harness.pressAndWaitForSnapshot(session, "tab", (text) =>
+        text.includes("filter: type to filter files"),
+      );
+      await session.type("betaz");
+      await harness.waitForSnapshot(session, (text) =>
+        text.includes("No files match the current filter."),
+      );
+      await harness.pressAndWaitForSnapshot(session, "backspace", (text) =>
+        text.includes("betaValue"),
+      );
+
+      // The remounted scrollbox must not steal the input's physical focus.
+      await session.type(".ts");
+      const filtered = await harness.waitForSnapshot(session, (text) =>
+        text.includes("filter: beta.ts"),
+      );
+      expect(filtered).toContain("betaValue");
+      expect(filtered).not.toContain("add = true");
+
+      await harness.pressAndWaitForSnapshot(
+        session,
+        "escape",
+        (text) => text.includes("filter: type to filter files") && text.includes("add = true"),
+      );
+      await harness.pressAndWaitForSnapshot(
+        session,
+        "escape",
+        (text) => !text.includes("filter: type to filter files"),
+      );
+      await harness.pressAndWaitForSnapshot(session, "q", (text) => text.includes("PAGER_EXITED"));
+    } finally {
+      session.close();
+    }
+  });
+
   test("pager mode hides chrome and pages forward on space", async () => {
     const fixture = harness.createPagerPatchFixture();
     const session = await harness.launchHunk({

@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { testRender } from "@opentui/react/test-utils";
 import { act, useState } from "react";
 import type { ScrollBoxRenderable } from "@opentui/core";
@@ -156,9 +156,20 @@ test("deep wrap toggles wait for new bounds and preserve the source line in both
     await pane.scroll(250);
     expect(pane.visibleLineRef.current()).toBe(251);
     await act(async () => pane.scrollRef.current!.scrollTo({ x: 40, y: 250 }));
-    await pane.update({ wrap: true });
-    // React has planned the new rows, but native content bounds still belong to the old plan.
-    expect(pane.scrollRef.current!.scrollTop).toBe(250);
+    await act(async () => pane.setup.renderer.idle());
+
+    // Hold automatic frames so the pre-layout assertion does not race native bounds updates.
+    const requestRender = spyOn(pane.setup.renderer, "requestRender").mockImplementation(() => {});
+    try {
+      await pane.update({ wrap: true });
+      await act(async () => Bun.sleep(30));
+      expect(pane.scrollRef.current!.content.height).toBe(300);
+      expect(pane.scrollRef.current!.scrollTop).toBe(250);
+    } finally {
+      requestRender.mockRestore();
+    }
+
+    // Explicit frames now apply the new bounds and restore the logical source line.
     await flushTestDocumentLayout(pane.setup);
     expect(pane.scrollRef.current!.scrollLeft).toBe(0);
     expect(pane.visibleLineRef.current()).toBe(251);
