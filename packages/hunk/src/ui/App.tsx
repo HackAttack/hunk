@@ -1698,7 +1698,6 @@ export function App({
             files={filteredFiles}
             visibleHunkIndexesByFileId={review.visibleHunkIndexesByFileId}
             semanticFileIdentities={semanticFileIdentities}
-            offloadLargeDiff={bootstrap.input.options.fast === true}
             lineHighlights={paintedLineHighlights}
             pagerMode={pagerMode}
             screenTop={diffPaneScreenTop}

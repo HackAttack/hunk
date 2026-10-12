@@ -101,7 +101,6 @@ export function DocumentPane({
         ) ??
         "text",
       theme,
-      offloadLargeDiff: false,
       signal: controller.signal,
     })
       .then((result) => {

@@ -3,8 +3,9 @@ import {
   createTestDiffFile,
   createTestSourceFetcher,
 } from "../../../../../test/helpers/diff-helpers";
+import type { DiffFile } from "../../core/changeset/model";
 import { resolveTheme } from "../themes";
-import { HIGHLIGHT_WORKER_MIN_LINES } from "./diffRows";
+import { buildUnifiedRows, type HighlightedDiffCode } from "./diffRows";
 import {
   hasPendingHighlightedDiffs,
   highlightedDiffCacheKey,
@@ -14,19 +15,18 @@ import {
 } from "./useHighlightedDiff";
 import { disposeHighlightWorker, registerHighlightWorker } from "./worker";
 
-// Release singleton worker doubles so later test files start from a real worker.
-afterAll(() => {
-  disposeHighlightWorker();
-});
-
-/** Build one file large enough to qualify for worker highlighting. */
+/** Build one added file whose highlighting routes through the worker. */
 function createLargeHighlightTestFile(id: string) {
   const lines = Array.from(
-    { length: HIGHLIGHT_WORKER_MIN_LINES },
+    { length: 40 },
     (_, index) => `export const line${index} = ${index};`,
   ).join("\n");
   return createTestDiffFile({ after: `${lines}\n`, before: "", id });
 }
+
+afterAll(() => {
+  disposeHighlightWorker();
+});
 
 /** Build equal-length patches whose only difference sits outside the former sampled regions. */
 function createAdversarialPatch(marker: string) {
@@ -112,9 +112,14 @@ describe("highlighted diff cache", () => {
     const firstHighlight = await prefetchHighlightedDiff({ file: first, theme });
     const secondHighlight = await prefetchHighlightedDiff({ file: second, theme });
     expect(secondHighlight).not.toBe(firstHighlight);
-    expect(JSON.stringify(firstHighlight.additionLines)).toContain("one");
-    expect(JSON.stringify(secondHighlight.additionLines)).toContain("two");
-    expect(JSON.stringify(secondHighlight.additionLines)).not.toContain("one");
+    const rowText = (file: DiffFile, highlighted: HighlightedDiffCode) =>
+      buildUnifiedRows(file, highlighted, theme)
+        .flatMap((row) => (row.type === "unified-line" ? row.cell.spans : []))
+        .map((span) => span.text)
+        .join("");
+    expect(rowText(first, firstHighlight)).toContain("one");
+    expect(rowText(second, secondHighlight)).toContain("two");
+    expect(rowText(second, secondHighlight)).not.toContain("one");
   });
 
   test("invalidates source-backed partial highlights when an unversioned provider changes", () => {
@@ -144,20 +149,12 @@ describe("highlighted diff cache", () => {
     );
   });
 
-  test("keeps inline highlighting as the default and offloads only when requested", async () => {
+  test("routes interactive highlighting through the worker by default", async () => {
     const theme = resolveTheme("github-dark-default", null);
     const worker = registerFailingHighlightWorkerForTest();
 
-    const inline = await prefetchHighlightedDiff({
-      file: createLargeHighlightTestFile("default-inline-highlight"),
-      theme,
-    });
-    expect(inline.retryable).toBeUndefined();
-    expect(worker.calls).toBe(0);
-
     const offloaded = await prefetchHighlightedDiff({
-      file: createLargeHighlightTestFile("fast-worker-highlight"),
-      offloadLargeDiff: true,
+      file: createLargeHighlightTestFile("default-worker-highlight"),
       theme,
     });
     expect(offloaded.retryable).toBe(true);
@@ -169,14 +166,14 @@ describe("highlighted diff cache", () => {
     const theme = resolveTheme("github-dark-default", null);
     const firstWorker = registerFailingHighlightWorkerForTest();
 
-    const first = await prefetchHighlightedDiff({ file, offloadLargeDiff: true, theme });
+    const first = await prefetchHighlightedDiff({ file, theme });
     expect(first.retryable).toBe(true);
     expect(firstWorker.calls).toBe(1);
 
     // Registering another recovered/recreated worker should receive a new request instead of a
     // shared-cache hit for the first worker's plain-row fallback.
     const secondWorker = registerFailingHighlightWorkerForTest();
-    const second = await prefetchHighlightedDiff({ file, offloadLargeDiff: true, theme });
+    const second = await prefetchHighlightedDiff({ file, theme });
     expect(second.retryable).toBe(true);
     expect(secondWorker.calls).toBe(1);
   });
@@ -189,13 +186,13 @@ describe("highlighted diff cache", () => {
     // repeating must settle on cached plain rows instead of restarting the highlight every time.
     for (const expectedCalls of [1, 1]) {
       const worker = registerFailingHighlightWorkerForTest();
-      const result = await prefetchHighlightedDiff({ file, offloadLargeDiff: true, theme });
+      const result = await prefetchHighlightedDiff({ file, theme });
       expect(result.retryable).toBe(true);
       expect(worker.calls).toBe(expectedCalls);
     }
 
     const settledWorker = registerFailingHighlightWorkerForTest();
-    const settled = await prefetchHighlightedDiff({ file, offloadLargeDiff: true, theme });
+    const settled = await prefetchHighlightedDiff({ file, theme });
     expect(settled.retryable).toBeUndefined();
     expect(settledWorker.calls).toBe(0);
   });
@@ -214,7 +211,6 @@ describe("highlighted diff cache", () => {
       registerFailingHighlightWorkerForTest();
       await prefetchHighlightedDiff({
         file: createTestRevision(index),
-        offloadLargeDiff: true,
         theme,
       });
     }
@@ -222,7 +218,7 @@ describe("highlighted diff cache", () => {
     // The oldest key gets a fresh retry budget rather than retaining its abandoned first failure.
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const worker = registerFailingHighlightWorkerForTest();
-      await prefetchHighlightedDiff({ file: createTestRevision(0), offloadLargeDiff: true, theme });
+      await prefetchHighlightedDiff({ file: createTestRevision(0), theme });
       expect(worker.calls).toBe(1);
     }
 
@@ -230,13 +226,11 @@ describe("highlighted diff cache", () => {
     registerFailingHighlightWorkerForTest();
     await prefetchHighlightedDiff({
       file: createTestRevision(1_099),
-      offloadLargeDiff: true,
       theme,
     });
     const worker = registerFailingHighlightWorkerForTest();
     const settled = await prefetchHighlightedDiff({
       file: createTestRevision(1_099),
-      offloadLargeDiff: true,
       theme,
     });
     expect(settled.retryable).toBeUndefined();
@@ -249,7 +243,7 @@ describe("highlighted diff cache", () => {
     const cacheKey = highlightedDiffCacheKey(theme, file);
 
     registerFailingHighlightWorkerForTest();
-    const first = await prefetchHighlightedDiff({ file, offloadLargeDiff: true, theme });
+    const first = await prefetchHighlightedDiff({ file, theme });
     expect(first.retryable).toBe(true);
 
     // A mounted file showing those provisional rows has no other signal: viewport prefetch fills
@@ -261,7 +255,7 @@ describe("highlighted diff cache", () => {
 
     try {
       registerFailingHighlightWorkerForTest();
-      await prefetchHighlightedDiff({ file, offloadLargeDiff: true, theme });
+      await prefetchHighlightedDiff({ file, theme });
 
       expect(notified).toBe(1);
     } finally {
@@ -269,7 +263,7 @@ describe("highlighted diff cache", () => {
     }
 
     // Unsubscribed readers stop hearing about the key.
-    await prefetchHighlightedDiff({ file, offloadLargeDiff: true, theme });
+    await prefetchHighlightedDiff({ file, theme });
     expect(notified).toBe(1);
   });
 
@@ -277,13 +271,15 @@ describe("highlighted diff cache", () => {
     const file = createLargeHighlightTestFile("late-provisional-reader");
     const theme = resolveTheme("github-dark-default", null);
     registerFailingHighlightWorkerForTest();
-    const first = await prefetchHighlightedDiff({ file, offloadLargeDiff: true, theme });
+    const first = await prefetchHighlightedDiff({ file, theme });
     expect(first.retryable).toBe(true);
 
     // Complete a successful retry in the window between the provisional render and its effect.
     const successful = await prefetchHighlightedDiff({ file, theme });
     expect(successful.retryable).toBeUndefined();
-    expect(successful.additionLines.length).toBeGreaterThan(0);
+    expect(
+      successful.compact?.payload.addition.lineOffsets.length ?? successful.additionLines.length,
+    ).toBeGreaterThan(0);
 
     let notified = 0;
     const unsubscribe = subscribeToHighlightedDiff(highlightedDiffCacheKey(theme, file), () => {

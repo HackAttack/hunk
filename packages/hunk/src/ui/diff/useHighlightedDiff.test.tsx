@@ -3,7 +3,6 @@ import { testRender } from "@opentui/react/test-utils";
 import { act } from "react";
 import { createTestDiffFile } from "../../../../../test/helpers/diff-helpers";
 import { resolveTheme } from "../themes";
-import { HIGHLIGHT_WORKER_MIN_LINES } from "./diffRows";
 import {
   prefetchHighlightedDiff,
   useHighlightedDiff,
@@ -16,10 +15,7 @@ afterAll(() => disposeHighlightWorker());
 test("repaints mounted provisional rows after a successful background retry", async () => {
   const file = createTestDiffFile({
     after:
-      Array.from(
-        { length: HIGHLIGHT_WORKER_MIN_LINES },
-        (_, index) => `const line${index} = ${index};`,
-      ).join("\n") + "\n",
+      Array.from({ length: 40 }, (_, index) => `const line${index} = ${index};`).join("\n") + "\n",
     before: "",
     id: "mounted-provisional-highlight",
     path: "mounted-provisional-highlight.ts",
@@ -41,10 +37,13 @@ test("repaints mounted provisional rows after a successful background retry", as
     const highlighted = useHighlightedDiff({
       file,
       theme,
-      offloadLargeDiff: true,
       shouldLoadHighlight: true,
     });
-    return <text>{highlighted?.additionLines.length ? "highlighted" : "plain"}</text>;
+    return (
+      <text>
+        {highlighted?.compact || highlighted?.additionLines.length ? "highlighted" : "plain"}
+      </text>
+    );
   }
 
   const setup = await testRender(<HighlightTestHarness />, { width: 40, height: 3 });
@@ -55,11 +54,13 @@ test("repaints mounted provisional rows after a successful background retry", as
     });
     expect(setup.captureCharFrame()).toContain("plain");
 
-    // An inline retry supplies a real highlighted result through the same shared cache commit.
+    // A recovered worker supplies a real highlighted result through the same shared cache commit.
     // Only prefetch runs here: the harness receives no new props and is never remounted.
     await act(async () => {
       const successful = await prefetchHighlightedDiff({ file, theme });
-      expect(successful.additionLines.length).toBeGreaterThan(0);
+      expect(
+        successful.compact?.payload.addition.lineOffsets.length ?? successful.additionLines.length,
+      ).toBeGreaterThan(0);
     });
     await act(async () => {
       await setup.renderOnce();
