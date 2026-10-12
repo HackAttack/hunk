@@ -315,15 +315,26 @@ module.exports = {
     expect(mod.default).toEqual({ missing: true, blocked: true, required: true, unused: true });
   });
 
-  test("keeps the existing asynchronous-hook limitation for synchronous CommonJS source require", async () => {
+  test("keeps the asynchronous-loader limitation for synchronous CommonJS source require", () => {
     const root = mkdtempSync(join(tmpdir(), "hunk-host-commonjs-"));
     tempDirs.push(root);
     createTestPackageExtension(root);
     const path = join(root, "commonjs.ts");
     writeFileSync(path, `export default require("fixture-pkg/commonjs");\n`);
 
-    // Correct export resolution does not make Bun's asynchronous onLoad hook synchronous.
-    await expect(importTempExtension(path)).rejects.toThrow(/require\(\) async module/);
+    // CommonJS conversion now starts Bun.build asynchronously. Isolate the rejected
+    // synchronous require so its pending build cannot outlive this fixture's cleanup.
+    const proc = Bun.spawnSync(
+      [
+        process.execPath,
+        join(import.meta.dir, "../../../../test/cli/fixtures/compiled-extension-imports.ts"),
+        path,
+      ],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+
+    expect(proc.exitCode).not.toBe(0);
+    expect(proc.stderr.toString()).toContain("require() async module");
   });
 
   test("does not resolve a type-only import the transpiler erases", async () => {
