@@ -383,6 +383,41 @@ describe("config resolution", () => {
     }
   });
 
+  test("defaults scroll off and rejects invalid configured values", () => {
+    const home = createTempDir("hunk-config-scrolloff-home-");
+    const repo = createTempDir("hunk-config-scrolloff-repo-");
+    createRepo(repo);
+
+    const input = createPatchPagerInput();
+    const resolved = resolveConfiguredCliInput(input, { cwd: repo, env: { HOME: home } }).input
+      .options;
+    expect(resolved.scrollOff).toBe(5);
+
+    mkdirSync(join(home, ".config", "hunk"), { recursive: true });
+    writeFileSync(join(home, ".config", "hunk", "config.toml"), "scroll_off = 5\n");
+    const configured = resolveConfiguredCliInput(input, { cwd: repo, env: { HOME: home } }).input
+      .options;
+    expect(configured.scrollOff).toBe(5);
+
+    const disabled = resolveConfiguredCliInput(
+      { ...input, options: { ...input.options, scrollOff: 0 } },
+      { cwd: repo, env: { HOME: home } },
+    ).input.options;
+    expect(disabled.scrollOff).toBe(0);
+
+    writeFileSync(join(home, ".config", "hunk", "config.toml"), "scroll_off = 0\n");
+    expect(
+      resolveConfiguredCliInput(input, { cwd: repo, env: { HOME: home } }).input.options.scrollOff,
+    ).toBe(0);
+
+    for (const invalid of ["-1", "41", '"5"']) {
+      writeFileSync(join(home, ".config", "hunk", "config.toml"), `scroll_off = ${invalid}\n`);
+      expect(() => resolveConfiguredCliInput(input, { cwd: repo, env: { HOME: home } })).toThrow(
+        /scroll_off/,
+      );
+    }
+  });
+
   test("resolves wheel scroll lines from user config and CLI but not repository config", () => {
     const home = createTempDir("hunk-config-wheel-home-");
     const repo = createTempDir("hunk-config-wheel-repo-");
@@ -1131,6 +1166,7 @@ describe("config resolution", () => {
         "tab_width = 8",
         "file_gap = 3",
         "hunk_gap = 1",
+        "scroll_off = 5",
         "wheel_scroll_lines = 4",
         "wrap_lines = true",
         "menu_bar = false",
@@ -1163,6 +1199,7 @@ describe("config resolution", () => {
     expect(bootstrap.initialTabWidth).toBe(8);
     expect(bootstrap.initialFileGap).toBe(3);
     expect(bootstrap.initialHunkGap).toBe(1);
+    expect(bootstrap.initialScrollOff).toBe(5);
     expect(bootstrap.initialWheelScrollLines).toBe(4);
     expect(bootstrap.initialWrapLines).toBe(true);
     expect(bootstrap.initialShowMenuBar).toBe(false);

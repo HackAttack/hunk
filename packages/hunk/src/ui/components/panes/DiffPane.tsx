@@ -10,6 +10,7 @@ import {
   type RefObject,
 } from "react";
 import { DEFAULT_FILE_GAP, DEFAULT_HUNK_GAP } from "../../../core/run/reviewGap";
+import { DEFAULT_SCROLL_OFF } from "../../../core/run/scrollOff";
 import { DEFAULT_TAB_WIDTH } from "../../../core/run/tabWidth";
 import {
   DEFAULT_WHEEL_SCROLL_LINES,
@@ -326,6 +327,7 @@ export function DiffPane({
   tabWidth = DEFAULT_TAB_WIDTH,
   fileGap = DEFAULT_FILE_GAP,
   hunkGap = DEFAULT_HUNK_GAP,
+  scrollOff = DEFAULT_SCROLL_OFF,
   wheelScrollLines = DEFAULT_WHEEL_SCROLL_LINES,
   wrapLines,
   wrapToggleScrollTop,
@@ -413,6 +415,7 @@ export function DiffPane({
   tabWidth?: number;
   fileGap?: number;
   hunkGap?: number;
+  scrollOff?: number;
   wheelScrollLines?: WheelScrollLines;
   wrapLines: boolean;
   wrapToggleScrollTop: number | null;
@@ -2016,6 +2019,7 @@ export function DiffPane({
               lineHeight: draftBounds.height,
               scrollTop: anchorTop,
               viewportHeight: scrollRef.current?.viewport.height || scrollViewport.height,
+              scrollOff,
             })
           : anchorTop;
         const restoreViewportAnchor = () => {
@@ -2112,6 +2116,7 @@ export function DiffPane({
     layoutToggleRequestId,
     layoutToggleScrollTop,
     rowBoundsInStream,
+    scrollOff,
     scrollRef,
     scrollViewport.height,
     scrollViewport.top,
@@ -2397,6 +2402,7 @@ export function DiffPane({
               lineHeight: bounds.height,
               scrollTop: scrollBox.scrollTop,
               viewportHeight,
+              scrollOff,
             });
     // A named line is the final scroll policy for this request, exactly as an
     // explicit alignment is: a cross-file reveal changes the selection, and the
@@ -2419,6 +2425,7 @@ export function DiffPane({
     lineCursorBoundsOf,
     lineCursorRevealRequest,
     rowBoundsInStream,
+    scrollOff,
     scrollRef,
     scrollViewport.height,
     supersedePendingSelectionReveal,
