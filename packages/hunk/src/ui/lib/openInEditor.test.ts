@@ -144,7 +144,7 @@ describe("open in editor helpers", () => {
     );
   });
 
-  test("returns an error when no file is selected", () => {
+  test("returns an error when no file is selected", async () => {
     const renderer = createRenderer();
     const spawnCalls: string[][] = [];
     mockSpawnSync((cmds) => {
@@ -153,7 +153,7 @@ describe("open in editor helpers", () => {
     });
 
     expect(
-      openSelectedFileInEditor({
+      await openSelectedFileInEditor({
         file: undefined,
         renderer,
         selectedHunk: undefined,
@@ -165,7 +165,7 @@ describe("open in editor helpers", () => {
     expect(renderer.resume).not.toHaveBeenCalled();
   });
 
-  test("returns an error when $EDITOR is unset", () => {
+  test("returns an error when $EDITOR is unset", async () => {
     const renderer = createRenderer();
     const spawnCalls: string[][] = [];
     mockSpawnSync((cmds) => {
@@ -175,7 +175,7 @@ describe("open in editor helpers", () => {
     delete process.env.EDITOR;
 
     expect(
-      openSelectedFileInEditor({
+      await openSelectedFileInEditor({
         file: createTestDiffFile({ path: "missing-editor.ts" }),
         renderer,
         selectedHunk: undefined,
@@ -187,7 +187,7 @@ describe("open in editor helpers", () => {
     expect(renderer.resume).not.toHaveBeenCalled();
   });
 
-  test("returns an error when the file does not exist on disk", () => {
+  test("returns an error when the file does not exist on disk", async () => {
     const renderer = createRenderer();
     const spawnCalls: string[][] = [];
     mockSpawnSync((cmds) => {
@@ -197,7 +197,7 @@ describe("open in editor helpers", () => {
     process.env.EDITOR = "nvim";
 
     expect(
-      openSelectedFileInEditor({
+      await openSelectedFileInEditor({
         basePath: createTempDir(),
         file: createTestDiffFile({ path: "missing-on-disk.ts" }),
         renderer,
@@ -210,7 +210,7 @@ describe("open in editor helpers", () => {
     expect(renderer.resume).not.toHaveBeenCalled();
   });
 
-  test("spawns terminal editors with suspend and resume around a successful edit", () => {
+  test("spawns terminal editors with suspend and resume around a successful edit", async () => {
     const basePath = createTempDir();
     writeFileSync(join(basePath, "example.ts"), "const value = 1;\n");
     process.env.EDITOR = "nvim --clean";
@@ -228,7 +228,7 @@ describe("open in editor helpers", () => {
     const file = createTestDiffFile({ path: "example.ts" });
 
     expect(
-      openSelectedFileInEditor({
+      await openSelectedFileInEditor({
         basePath,
         file,
         renderer,
@@ -246,7 +246,75 @@ describe("open in editor helpers", () => {
     expect(renderer.resume).toHaveBeenCalledTimes(1);
   });
 
-  test("opens the current line instead of the selected hunk start", () => {
+  test("lets the paused stdin reader release before spawning a terminal editor", async () => {
+    const filePath = join(createTempDir(), "example.ts");
+    writeFileSync(filePath, "before");
+    process.env.EDITOR = "nvim --clean";
+    let readerReleased = false;
+    const renderer = createRenderer();
+    renderer.suspend = mock(() => {
+      // Match Bun's process.stdin pause listener, which disowns its reader on nextTick.
+      process.nextTick(() => {
+        readerReleased = true;
+      });
+    });
+    const spawn = mock(() => {
+      expect(readerReleased).toBe(true);
+      expect(renderer.resume).not.toHaveBeenCalled();
+      return { exitCode: 0 };
+    });
+    mockSpawnSync(spawn);
+
+    const editing = openFileInEditor({ filePath, line: 1, renderer });
+    expect(renderer.suspend).toHaveBeenCalledTimes(1);
+    expect(spawn).not.toHaveBeenCalled();
+    expect(await editing).toBeNull();
+    expect(spawn).toHaveBeenCalledTimes(1);
+    expect(renderer.resume).toHaveBeenCalledTimes(1);
+  });
+
+  test("does not launch or resume an editor after the suspended session closes", async () => {
+    const filePath = join(createTempDir(), "example.ts");
+    writeFileSync(filePath, "before");
+    process.env.EDITOR = "nvim";
+    const renderer = createRenderer();
+    renderer.suspend = mock(() => {
+      process.nextTick(() => {
+        renderer.isDestroyed = true;
+      });
+    });
+    const spawn = mock(() => ({ exitCode: 0 }));
+    mockSpawnSync(spawn);
+
+    expect(await openFileInEditor({ filePath, line: 1, renderer })).toBe(
+      "The terminal session has closed.",
+    );
+    expect(spawn).not.toHaveBeenCalled();
+    expect(renderer.resume).not.toHaveBeenCalled();
+  });
+
+  test("serializes editor handoffs on the same renderer", async () => {
+    const filePath = join(createTempDir(), "example.ts");
+    writeFileSync(filePath, "before");
+    process.env.EDITOR = "nvim";
+    const renderer = createRenderer();
+    const spawn = mock(() => ({ exitCode: 0 }));
+    mockSpawnSync(spawn);
+
+    const editing = openFileInEditor({ filePath, line: 1, renderer });
+    expect(await openFileInEditor({ filePath, line: 1, renderer })).toBe(
+      "An editor is already open.",
+    );
+    expect(await editing).toBeNull();
+    expect(spawn).toHaveBeenCalledTimes(1);
+    expect(renderer.suspend).toHaveBeenCalledTimes(1);
+    expect(renderer.resume).toHaveBeenCalledTimes(1);
+
+    expect(await openFileInEditor({ filePath, line: 1, renderer })).toBeNull();
+    expect(spawn).toHaveBeenCalledTimes(2);
+  });
+
+  test("opens the current line instead of the selected hunk start", async () => {
     const basePath = createTempDir();
     writeFileSync(join(basePath, "example.ts"), "const value = 1;\n");
     process.env.EDITOR = "vim";
@@ -260,7 +328,7 @@ describe("open in editor helpers", () => {
     const file = createTestDiffFile({ path: "example.ts" });
 
     expect(
-      openSelectedFileInEditor({
+      await openSelectedFileInEditor({
         basePath,
         file,
         lineCursor: {
@@ -276,7 +344,7 @@ describe("open in editor helpers", () => {
     expect(spawnCalls).toEqual([["vim", "+3", join(basePath, "example.ts")]]);
   });
 
-  test("maps an old-side current line onto the line on disk", () => {
+  test("maps an old-side current line onto the line on disk", async () => {
     const basePath = createTempDir();
     writeFileSync(join(basePath, "example.ts"), "one\nfour\n");
     process.env.EDITOR = "vim";
@@ -294,7 +362,7 @@ describe("open in editor helpers", () => {
     });
 
     expect(
-      openSelectedFileInEditor({
+      await openSelectedFileInEditor({
         basePath,
         file,
         lineCursor: {
@@ -310,7 +378,7 @@ describe("open in editor helpers", () => {
     expect(spawnCalls).toEqual([["vim", "+2", join(basePath, "example.ts")]]);
   });
 
-  test("walks leading context when mapping an old-side current line", () => {
+  test("walks leading context when mapping an old-side current line", async () => {
     const basePath = createTempDir();
     writeFileSync(join(basePath, "example.ts"), "one\nfour\n");
     process.env.EDITOR = "vim";
@@ -329,7 +397,7 @@ describe("open in editor helpers", () => {
     });
 
     expect(
-      openSelectedFileInEditor({
+      await openSelectedFileInEditor({
         basePath,
         file,
         lineCursor: {
@@ -346,7 +414,7 @@ describe("open in editor helpers", () => {
     expect(spawnCalls).toEqual([["vim", "+2", join(basePath, "example.ts")]]);
   });
 
-  test("preserves the deleted line's offset within a multi-line replacement", () => {
+  test("preserves the deleted line's offset within a multi-line replacement", async () => {
     const basePath = createTempDir();
     writeFileSync(join(basePath, "example.ts"), "one\nTWO\nTHREE\nfour\n");
     process.env.EDITOR = "vim";
@@ -364,7 +432,7 @@ describe("open in editor helpers", () => {
     });
 
     expect(
-      openSelectedFileInEditor({
+      await openSelectedFileInEditor({
         basePath,
         file,
         lineCursor: {
@@ -382,7 +450,7 @@ describe("open in editor helpers", () => {
     expect(spawnCalls).toEqual([["vim", "+3", join(basePath, "example.ts")]]);
   });
 
-  test("falls back to the selected hunk when the cursor is in another file", () => {
+  test("falls back to the selected hunk when the cursor is in another file", async () => {
     const basePath = createTempDir();
     writeFileSync(join(basePath, "example.ts"), "const value = 1;\n");
     process.env.EDITOR = "vim";
@@ -396,7 +464,7 @@ describe("open in editor helpers", () => {
     const file = createTestDiffFile({ path: "example.ts" });
 
     expect(
-      openSelectedFileInEditor({
+      await openSelectedFileInEditor({
         basePath,
         file,
         lineCursor: {
@@ -414,7 +482,7 @@ describe("open in editor helpers", () => {
     ]);
   });
 
-  test("uses deletion line numbers for deleted files", () => {
+  test("uses deletion line numbers for deleted files", async () => {
     const basePath = createTempDir();
     writeFileSync(join(basePath, "deleted.ts"), "const old = true;\n");
     process.env.EDITOR = "vim";
@@ -440,7 +508,7 @@ describe("open in editor helpers", () => {
     };
 
     expect(
-      openSelectedFileInEditor({
+      await openSelectedFileInEditor({
         basePath,
         file,
         renderer: createRenderer(),
@@ -451,7 +519,7 @@ describe("open in editor helpers", () => {
     expect(spawnCalls).toEqual([["vim", "+9", join(basePath, "deleted.ts")]]);
   });
 
-  test("does not suspend GUI editors and reports non-zero exits", () => {
+  test("does not suspend GUI editors and reports non-zero exits", async () => {
     const basePath = createTempDir();
     writeFileSync(join(basePath, "example.ts"), "const value = 1;\n");
     process.env.EDITOR = "code --wait";
@@ -466,7 +534,7 @@ describe("open in editor helpers", () => {
     const file = createTestDiffFile({ path: "example.ts" });
 
     expect(
-      openSelectedFileInEditor({
+      await openSelectedFileInEditor({
         basePath,
         file,
         renderer,
@@ -479,7 +547,7 @@ describe("open in editor helpers", () => {
     expect(renderer.resume).not.toHaveBeenCalled();
   });
 
-  test("waits for GUI editors before releasing a document copy", () => {
+  test("waits for GUI editors before releasing a document copy", async () => {
     const filePath = join(createTempDir(), "example.ts");
     writeFileSync(filePath, "before");
     process.env.EDITOR = "code";
@@ -489,12 +557,12 @@ describe("open in editor helpers", () => {
       return { exitCode: 0 };
     });
     expect(
-      openFileInEditor({ filePath, line: 3, renderer: createRenderer(), wait: true }),
+      await openFileInEditor({ filePath, line: 3, renderer: createRenderer(), wait: true }),
     ).toBeNull();
     expect(spawnCalls).toEqual([["code", "--wait", "--goto", `${filePath}:3`]]);
   });
 
-  test("resumes after spawn failures and reports launch errors", () => {
+  test("resumes after spawn failures and reports launch errors", async () => {
     const basePath = createTempDir();
     writeFileSync(join(basePath, "example.ts"), "const value = 1;\n");
     process.env.EDITOR = "vi";
@@ -507,7 +575,7 @@ describe("open in editor helpers", () => {
     const file = createTestDiffFile({ path: "example.ts" });
 
     expect(
-      openSelectedFileInEditor({
+      await openSelectedFileInEditor({
         basePath,
         file,
         renderer,

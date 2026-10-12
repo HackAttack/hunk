@@ -1112,17 +1112,19 @@ export function App({
     showNotice: showSessionNotice,
   });
 
-  const triggerEditSelectedFile = useCallback(() => {
+  const triggerEditSelectedFile = useCallback(async () => {
     const basePath = isVcsReviewInput(bootstrap.input)
       ? bootstrap.changeset.sourceLabel
       : undefined;
-    const message = openSelectedFileInEditor({
+    const message = await openSelectedFileInEditor({
       basePath,
       file: selectedFile,
       lineCursor: activeLineCursor,
       renderer,
       selectedHunk: review.selectedHunk,
     });
+
+    if (renderer.isDestroyed) return;
 
     if (message) {
       showSessionNotice(message);
