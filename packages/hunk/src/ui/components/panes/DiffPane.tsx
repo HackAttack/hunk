@@ -2030,7 +2030,7 @@ export function DiffPane({
 
       if (anchorTop !== null) {
         const draftBounds =
-          draftNoteId && draftNoteFileId && scrollToNote
+          draftNoteId && draftNoteFileId
             ? rowBoundsInStream(draftNoteFileId, inlineNoteStableKey(draftNoteId))
             : undefined;
         const nextTop = draftBounds
@@ -2042,9 +2042,8 @@ export function DiffPane({
             })
           : anchorTop;
         const restoreViewportAnchor = () => {
-          // Cursor- and click-targeted composers are already at the reviewer's position, so their
-          // stream geometry pushes following rows down without pulling the target line upward.
-          // Default draft starts still reveal the full composer because they may target offscreen.
+          // Preserve the target line's position when the composer fits; otherwise reveal the
+          // whole composer, including Save/Cancel, with only the missing rows of scrolling.
           scrollRef.current?.scrollTo(nextTop);
         };
 

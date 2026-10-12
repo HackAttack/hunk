@@ -130,7 +130,7 @@ describe("PTY notes", () => {
     }
   });
 
-  test("opening a draft keeps the active line fixed while pushing following code down", async () => {
+  test("opening a draft keeps the active line fixed unless the composer needs more room", async () => {
     const fixture = harness.createScrollableFilePair();
     const session = await harness.launchHunk({
       args: ["diff", "--files", fixture.before, fixture.after, "--mode", "unified"],
@@ -160,6 +160,8 @@ describe("PTY notes", () => {
       expect(lineIndexOf(pushedDraft, firstActiveLine)).toBe(firstActiveRow);
       expect(lineIndexOf(pushedDraft, "Draft note")).toBe(firstActiveRow + 1);
       expect(lineIndexOf(pushedDraft, followingLine)).toBeGreaterThan(followingRowBefore);
+      expect(pushedDraft).toContain("^S save");
+      expect(pushedDraft).toContain("Esc cancel");
 
       await harness.pressAndWaitForSnapshot(
         session,
@@ -178,12 +180,55 @@ describe("PTY notes", () => {
       await sleep(100);
       const bottomDraft = await session.text({ immediate: true });
 
-      expect(lineIndexOf(bottomDraft, bottomActiveLine)).toBe(bottomActiveRow);
-      expect(lineIndexOf(bottomDraft, "Draft note")).toBe(bottomActiveRow + 1);
+      const revealedActiveRow = lineIndexOf(bottomDraft, bottomActiveLine);
+      expect(revealedActiveRow).toBeGreaterThan(0);
+      expect(revealedActiveRow).toBeLessThan(bottomActiveRow);
+      expect(lineIndexOf(bottomDraft, "Draft note")).toBe(revealedActiveRow + 1);
+      expect(bottomDraft).toContain("Write a note");
+      expect(bottomDraft).toContain("^S save");
+      expect(bottomDraft).toContain("Esc cancel");
     } finally {
       session.close();
     }
   });
+
+  for (const mode of ["unified", "split"] as const) {
+    test(`a draft on the last line reveals its full composer in ${mode} mode`, async () => {
+      const fixture = harness.createScrollableFilePair();
+      writeFileSync(fixture.before, "");
+      writeFileSync(
+        fixture.after,
+        Array.from({ length: 64 }, (_, index) => `added line ${index + 1}\n`).join(""),
+      );
+      const session = await harness.launchHunk({
+        args: ["diff", "--files", fixture.before, fixture.after, "--mode", mode],
+        cols: 100,
+        rows: 30,
+      });
+
+      try {
+        await session.waitForText(/View\s+Navigate\s+Agent\s+Help/, { timeout: 15_000 });
+        await session.waitIdle({ timeout: 500 });
+        await pressKeyRepeat(session, "j", 63);
+        const beforeDraft = await session.text({ immediate: true });
+        const targetRow = lineIndexOf(beforeDraft, "added line 64");
+        expect(targetRow).toBeGreaterThan(0);
+
+        const draft = await harness.pressAndWaitForText(session, "c", /Esc cancel/, {
+          timeout: 5_000,
+        });
+        const revealedTargetRow = lineIndexOf(draft, "added line 64");
+        expect(revealedTargetRow).toBeGreaterThan(0);
+        expect(revealedTargetRow).toBeLessThan(targetRow);
+        expect(lineIndexOf(draft, "Draft note")).toBe(revealedTargetRow + 1);
+        expect(draft).toContain("Write a note");
+        // At the end of the stream, the footer takes the old bottom row: no extra scrolling.
+        expect(lineIndexOf(draft, "^S save")).toBe(targetRow);
+      } finally {
+        session.close();
+      }
+    });
+  }
 
   test("cursor-line-off drafts still reveal their default target and full composer", async () => {
     const fixture = harness.createScrollableFilePair();
