@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
-import type { Session } from "tuistory";
 import { createPtyHarness, lineIndexOf, moveMouse, rowCellBackgrounds, sleep } from "./harness";
 
 const harness = createPtyHarness();
@@ -14,21 +13,6 @@ afterEach(() => {
 /** Read the [LR]-line label the draft card reports, or null while none is visible. */
 function draftTarget(text: string): string | null {
   return /Draft note[^ ]* - [^R]*([LR]\d+)/.exec(text)?.[1] ?? null;
-}
-
-/** Find the terminal row carrying the current-line highlight tint and return its text. */
-function highlightedRowText(session: Session): string | null {
-  // The two hexes are the runtime blends cursorLineHighlightBg paints over context and
-  // changed rows for the default theme; a theme or blend-ratio change invalidates them.
-  const cursorTints = ["#373737", "#2a2a2a"];
-  const data = session.getTerminalData();
-  for (const line of data.lines) {
-    const bgs = line.spans.map((span) => span.bg ?? "");
-    if (bgs.some((bg) => cursorTints.includes(bg))) {
-      return line.spans.map((span) => span.text).join("");
-    }
-  }
-  return null;
 }
 
 describe("PTY comment target", () => {
@@ -48,11 +32,13 @@ describe("PTY comment target", () => {
       await session.waitForText(/line1 = 100/, { timeout: 15_000 });
       await session.waitIdle({ timeout: 300 });
 
-      // Click the row showing line2 (terminal data row 6; SGR encodes +1).
+      // Compare code-cell paint before and after adopting line2, without assuming a theme.
+      const beforeClick = rowCellBackgrounds(session, 6).slice(12, 40);
       session.writeRaw("\x1b[<0;9;7M");
       session.writeRaw("\x1b[<0;9;7m");
       await session.waitIdle({ timeout: 300 });
-      expect(highlightedRowText(session)).toContain("line2 = 2;");
+      const clickedPaint = rowCellBackgrounds(session, 6).slice(12, 40);
+      expect(clickedPaint).not.toEqual(beforeClick);
 
       // Fidget: wheel down 3, then up 3 — net zero viewport movement.
       for (let i = 0; i < 3; i += 1) {
@@ -67,14 +53,13 @@ describe("PTY comment target", () => {
 
       // The viewport is back where it started with no deliberate cursor move in
       // between. The highlight must still sit on line2 — and so must the draft.
-      const highlight = highlightedRowText(session);
+      expect(rowCellBackgrounds(session, 6).slice(12, 40)).toEqual(clickedPaint);
 
       await session.press("c");
       await session.waitIdle({ timeout: 400 });
       const text = await session.text({ immediate: true });
       const target = draftTarget(text);
 
-      expect(highlight).toContain("line2 = 2;");
       expect(target).toBe("R2");
     } finally {
       session.close();
@@ -120,6 +105,47 @@ describe("PTY comment target", () => {
       session.close();
     }
   });
+
+  test.each([5, 10])(
+    "a batched %i-event wheel return restores the original stop",
+    async (steps) => {
+      const fixture = harness.createMultiHunkFilePair();
+      const session = await harness.launchHunk({
+        args: ["diff", "--files", fixture.before, fixture.after, "--mode", "split"],
+        cols: 120,
+        rows: 16,
+      });
+
+      try {
+        await session.waitForText(/line1 = 100/, { timeout: 15_000 });
+        await session.waitIdle({ timeout: 300 });
+        const initialText = await session.text({ immediate: true });
+
+        session.writeRaw("\x1b[<0;9;7M\x1b[<0;9;7m");
+        await session.waitIdle({ timeout: 300 });
+        const clickedPaint = rowCellBackgrounds(session, 6).slice(12, 40);
+
+        // Build multiple clamp hops, then return in one stdin burst / viewport update.
+        // Longer bursts skip intermediate stops that are no longer visible at the end.
+        for (let i = 0; i < steps; i += 1) {
+          await session.scrollDown(1);
+          await session.waitIdle({ timeout: 120 });
+        }
+        session.writeRaw("\x1b[<64;9;7M".repeat(steps));
+        await session.waitIdle({ timeout: 400 });
+
+        expect(await session.text({ immediate: true })).toBe(initialText);
+        expect(rowCellBackgrounds(session, 6).slice(12, 40)).toEqual(clickedPaint);
+
+        const draft = await harness.pressAndWaitForText(session, "c", /Draft note/, {
+          timeout: 5_000,
+        });
+        expect(draftTarget(draft)).toBe("R2");
+      } finally {
+        session.close();
+      }
+    },
+  );
 
   test("stepping mid-roundtrip ends the unwind at the new stop", async () => {
     // The unwind memory exists for wheel-only journeys: a deliberate cursor step

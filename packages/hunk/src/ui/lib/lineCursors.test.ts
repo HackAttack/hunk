@@ -505,6 +505,50 @@ describe("clampLineCursorToViewport", () => {
     ).toEqual(cursors[0]!);
   });
 
+  test("restores the original stop even when a batched return skips intermediate stops", () => {
+    expect(
+      clampLineCursorToViewport({
+        boundsOf,
+        current: cursors[3]!,
+        clampedFrom: cursors[0]!,
+        cursors,
+        scrollTop: 0,
+        viewportHeight: 2,
+      }),
+    ).toEqual(cursors[0]!);
+  });
+
+  test("checks only the original and current stops throughout a long scroll journey", () => {
+    const longCursors = Array.from(
+      { length: 4096 },
+      (_, index): LineCursor => ({
+        ...cursors[0]!,
+        stableKey: `line:${index}`,
+        target: { side: "new", line: index + 1 },
+      }),
+    );
+    let lookupCount = 0;
+
+    /** Count measured lookups without introducing a linear fixture lookup. */
+    const countedBoundsOf = (cursor: LineCursor) => {
+      lookupCount += 1;
+      return { top: cursor.target.line - 1, height: 1 };
+    };
+
+    for (let index = 1; index < longCursors.length; index += 1) {
+      clampLineCursorToViewport({
+        boundsOf: countedBoundsOf,
+        current: longCursors[index]!,
+        clampedFrom: longCursors[0]!,
+        cursors: longCursors,
+        scrollTop: index,
+        viewportHeight: 2,
+      });
+    }
+
+    expect(lookupCount).toBe(2 * (longCursors.length - 1));
+  });
+
   test("keeps the clamped stop while the remembered one is still off-screen", () => {
     expect(
       clampLineCursorToViewport({

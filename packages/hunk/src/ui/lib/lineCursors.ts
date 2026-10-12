@@ -310,7 +310,7 @@ export function clampLineCursorToViewport({
   scrollTop: number;
   viewportHeight: number;
   /**
-   * The stop the current line was on before the clamp moved it, when the caller knows it.
+   * The original stop displaced by viewport clamping, when the caller knows it.
    *
    * Wheel roundtrips move the viewport past a line and back; without this memory the clamp
    * re-adopts an edge stop on the way out and then keeps it on the way home, so the comment
@@ -324,8 +324,8 @@ export function clampLineCursorToViewport({
 
   const viewportBottom = scrollTop + viewportHeight;
 
-  // A return journey restores the stop the last clamp moved away from, when that stop is
-  // visible again and the viewport only moves while the pointer scrolls.
+  // Restore the original stop directly, without retaining or walking intermediate hops.
+  // A batched return may skip every viewport-edge stop between here and the original.
   if (clampedFrom) {
     const fromBounds = boundsOf(clampedFrom);
     if (
