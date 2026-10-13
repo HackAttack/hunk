@@ -3,9 +3,16 @@
     "slug": "index",
     "title": "Changelog",
     "tagline": "Every Hunk release, grouped by minor series.",
-    "meta": "23 release series · March 2026 – September 2026",
-    "chips": ["0.23", "0.22", "0.21", "0.20", "0.19", "…"],
-    "alt": "Hunk changelog — 23 release series · March 2026 – September 2026"
+    "meta": "24 release series · March 2026 – October 2026",
+    "chips": ["0.24", "0.23", "0.22", "0.21", "0.20", "…"],
+    "alt": "Hunk changelog — 24 release series · March 2026 – October 2026"
+  },
+  {
+    "slug": "0.24",
+    "title": "Hunk 0.24",
+    "tagline": "Hunk 0.24 adds complete-file and directory browsing, a live workspace status view, npm-installed extensions, shell completions, and…",
+    "meta": "Prerelease · October 13, 2026 · 1 release · 52 changes",
+    "alt": "Hunk 0.24 release notes — Prerelease · October 13, 2026 · 1 release · 52 changes"
   },
   {
     "slug": "0.23",
