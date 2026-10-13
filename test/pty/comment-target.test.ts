@@ -36,7 +36,13 @@ describe("PTY comment target", () => {
       const beforeClick = rowCellBackgrounds(session, 6).slice(12, 40);
       session.writeRaw("\x1b[<0;9;7M");
       session.writeRaw("\x1b[<0;9;7m");
-      await session.waitIdle({ timeout: 300 });
+      // Output idleness can precede the click's committed paint on a busy runner.
+      await harness.waitForSnapshot(
+        session,
+        () =>
+          JSON.stringify(rowCellBackgrounds(session, 6).slice(12, 40)) !==
+          JSON.stringify(beforeClick),
+      );
       const clickedPaint = rowCellBackgrounds(session, 6).slice(12, 40);
       expect(clickedPaint).not.toEqual(beforeClick);
 

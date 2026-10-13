@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { readAppStateRecord, updateAppStateRecord } from "../core/process/appStateFile";
-import { resolveCanonicalPath, resolveAppStatePath } from "../core/run/paths";
+import { prepareAppStatePath } from "../core/process/appStateLocation";
+import { resolveCanonicalPath } from "../core/run/paths";
 
 /**
  * Repo-local extensions run arbitrary code from the repository under review,
@@ -23,7 +24,7 @@ export interface ExtensionTrustOptions {
 
 /** Resolve the state file backing trust decisions, if the environment has one. */
 function resolveStatePath(options: ExtensionTrustOptions) {
-  return options.statePath ?? resolveAppStatePath(options.env ?? process.env);
+  return options.statePath ?? prepareAppStatePath(options.env ?? process.env);
 }
 
 /**
@@ -95,7 +96,7 @@ export function writeExtensionTrust(
 ) {
   const statePath = resolveStatePath(options);
   if (!statePath) {
-    throw new Error("Could not resolve the Hunk state path because HOME/XDG_CONFIG_HOME is unset.");
+    throw new Error("Could not resolve the Hunk state path because HOME/XDG_STATE_HOME is unset.");
   }
 
   updateAppStateRecord(statePath, {

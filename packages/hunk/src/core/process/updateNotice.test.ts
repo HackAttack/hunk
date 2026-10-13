@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resolveStartupUpdateNotice } from "./updateNotice";
+import { readAppStateRecord, writeAppStateRecord } from "./appStateFile";
 
 /** Build one JSON response that mimics the npm dist-tags payload. */
 function createDistTagsResponse(tags: Record<string, unknown>, status = 200) {
@@ -43,6 +44,34 @@ async function withTempStatePath(run: (statePath: string) => Promise<void>) {
 }
 
 describe("startup update notice", () => {
+  test("preserves the legacy release-check interval when switching to XDG state", async () => {
+    await withTempStatePath(async (rootPath) => {
+      const env = { XDG_CONFIG_HOME: `${rootPath}-config`, XDG_STATE_HOME: `${rootPath}-state` };
+      const legacy = join(env.XDG_CONFIG_HOME, "hunk", "state.json");
+      const target = join(env.XDG_STATE_HOME, "hunk", "state.json");
+      const now = Date.now();
+      const record = { lastReleaseCheckAt: new Date(now).toISOString(), other: "preserved" };
+      writeAppStateRecord(legacy, record);
+      let fetchCount = 0;
+
+      expect(
+        await resolveStartupUpdateNotice({
+          env,
+          now: () => now,
+          resolveExecutablePath: () => NPM_EXECUTABLE_PATH,
+          resolveInstalledVersion: () => "0.7.0",
+          fetchImpl: async () => {
+            fetchCount += 1;
+            return createDistTagsResponse({ latest: "0.7.1" });
+          },
+        }),
+      ).toBeNull();
+      expect(fetchCount).toBe(0);
+      expect(readAppStateRecord(target)).toMatchObject(record);
+      expect(readAppStateRecord(legacy)).toEqual(record);
+    });
+  });
+
   test("prefers latest for stable installs when latest is newer", async () => {
     await withTempStatePath(async (statePath) => {
       await expect(

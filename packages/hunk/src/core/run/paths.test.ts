@@ -9,6 +9,7 @@ import {
   resolveCanonicalPath,
   resolveGlobalConfigPath,
   resolveAppStatePath,
+  resolveGlobalExtensionsDir,
 } from "./paths";
 
 function createTempRoot(prefix: string) {
@@ -17,10 +18,32 @@ function createTempRoot(prefix: string) {
 
 describe("paths", () => {
   test("resolves XDG config and state paths", () => {
-    const env = { XDG_CONFIG_HOME: join("/tmp", "xdg-home") } as NodeJS.ProcessEnv;
+    const env = {
+      XDG_CONFIG_HOME: join(tmpdir(), "xdg-config"),
+      XDG_STATE_HOME: join(tmpdir(), "xdg-state"),
+    } as NodeJS.ProcessEnv;
 
-    expect(resolveGlobalConfigPath(env)).toBe(join("/tmp", "xdg-home", "hunk", "config.toml"));
-    expect(resolveAppStatePath(env)).toBe(join("/tmp", "xdg-home", "hunk", "state.json"));
+    expect(resolveGlobalConfigPath(env)).toBe(join(tmpdir(), "xdg-config", "hunk", "config.toml"));
+    expect(resolveAppStatePath(env)).toBe(join(tmpdir(), "xdg-state", "hunk", "state.json"));
+    expect(resolveGlobalExtensionsDir(env)).toBe(
+      join(tmpdir(), "xdg-config", "hunk", "extensions"),
+    );
+  });
+
+  test("falls back to XDG state while keeping extensions in the config directory", () => {
+    const env = { HOME: join(tmpdir(), "home") } as NodeJS.ProcessEnv;
+
+    expect(resolveAppStatePath(env)).toBe(join(env.HOME!, ".local", "state", "hunk", "state.json"));
+    expect(resolveGlobalExtensionsDir(env)).toBe(join(env.HOME!, ".config", "hunk", "extensions"));
+  });
+
+  test("ignores a relative XDG_STATE_HOME", () => {
+    const env = {
+      HOME: join(tmpdir(), "home"),
+      XDG_STATE_HOME: join("relative", "state"),
+    } as NodeJS.ProcessEnv;
+
+    expect(resolveAppStatePath(env)).toBe(join(env.HOME!, ".local", "state", "hunk", "state.json"));
   });
 
   test("falls back to HOME for config and state paths", () => {
@@ -29,7 +52,9 @@ describe("paths", () => {
     expect(resolveGlobalConfigPath(env)).toBe(
       join("/tmp", "home", ".config", "hunk", "config.toml"),
     );
-    expect(resolveAppStatePath(env)).toBe(join("/tmp", "home", ".config", "hunk", "state.json"));
+    expect(resolveAppStatePath(env)).toBe(
+      join("/tmp", "home", ".local", "state", "hunk", "state.json"),
+    );
   });
 
   test("falls back to USERPROFILE when HOME is unavailable", () => {
@@ -39,7 +64,7 @@ describe("paths", () => {
       join("/tmp", "windows-profile", ".config", "hunk", "config.toml"),
     );
     expect(resolveAppStatePath(env)).toBe(
-      join("/tmp", "windows-profile", ".config", "hunk", "state.json"),
+      join("/tmp", "windows-profile", ".local", "state", "hunk", "state.json"),
     );
   });
 

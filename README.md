@@ -172,6 +172,11 @@ You can persist preferences to a config file:
 - `~/.config/hunk/config.toml`
 - `.hunk/config.toml`
 
+Persistent state uses `$XDG_STATE_HOME/hunk/state.json` when the variable is
+absolute, or `~/.local/state/hunk/state.json` otherwise. Hunk preserves existing
+state by copying the old config-directory file on first use, keeping the original
+and falling back to it if migration fails. Global extension paths are unchanged.
+
 For example:
 
 ```toml

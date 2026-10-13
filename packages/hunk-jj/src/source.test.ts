@@ -62,25 +62,30 @@ const jjTest = Bun.which("jj") ? test : test.skip;
 const unixJjTest = Bun.which("jj") && process.platform !== "win32" ? test : test.skip;
 
 describe("Jujutsu source reading", () => {
-  jjTest("reads exact commit contents through `jj file show`", async () => {
-    const repoRoot = createTempJjRepo("hunk-source-jj-");
-    const filePath = "-note [exact] file.txt";
-    writeFileSync(join(repoRoot, filePath), "first revision\n");
-    writeFileSync(join(repoRoot, "-note e file.txt"), "glob decoy\n");
-    jj(repoRoot, "commit", "-m", "first");
-    const firstCommitId = jj(repoRoot, "log", "--no-graph", "-r", "@-", "-T", "commit_id");
+  // Repository setup plus seven jj launches can exceed Bun's 5s default on Windows runners.
+  jjTest(
+    "reads exact commit contents through `jj file show`",
+    async () => {
+      const repoRoot = createTempJjRepo("hunk-source-jj-");
+      const filePath = "-note [exact] file.txt";
+      writeFileSync(join(repoRoot, filePath), "first revision\n");
+      writeFileSync(join(repoRoot, "-note e file.txt"), "glob decoy\n");
+      jj(repoRoot, "commit", "-m", "first");
+      const firstCommitId = jj(repoRoot, "log", "--no-graph", "-r", "@-", "-T", "commit_id");
 
-    writeFileSync(join(repoRoot, filePath), "second revision\n");
-    jj(repoRoot, "commit", "-m", "second");
-    const secondCommitId = jj(repoRoot, "log", "--no-graph", "-r", "@-", "-T", "commit_id");
+      writeFileSync(join(repoRoot, filePath), "second revision\n");
+      jj(repoRoot, "commit", "-m", "second");
+      const secondCommitId = jj(repoRoot, "log", "--no-graph", "-r", "@-", "-T", "commit_id");
 
-    await expect(
-      readJjFileSource({ repoRoot, commitId: firstCommitId, path: filePath }),
-    ).resolves.toBe("first revision\n");
-    await expect(
-      readJjFileSource({ repoRoot, commitId: secondCommitId, path: filePath }),
-    ).resolves.toBe("second revision\n");
-  });
+      await expect(
+        readJjFileSource({ repoRoot, commitId: firstCommitId, path: filePath }),
+      ).resolves.toBe("first revision\n");
+      await expect(
+        readJjFileSource({ repoRoot, commitId: secondCommitId, path: filePath }),
+      ).resolves.toBe("second revision\n");
+    },
+    process.platform === "win32" ? 20_000 : 5_000,
+  );
 
   unixJjTest("reads Unix filenames containing backslashes", async () => {
     const repoRoot = createTempJjRepo("hunk-source-jj-backslash-");

@@ -385,7 +385,12 @@ test("enabled trusted launch extensions span real broker-mounted sibling reviews
     join(sibling, ".hunk", "extensions", "forbidden.ts"),
     `import { writeFileSync } from "node:fs"; export default () => writeFileSync(${JSON.stringify(forbidden)}, "ran");`,
   );
-  const env = { ...process.env, XDG_CONFIG_HOME: configHome, XDG_RUNTIME_DIR: configHome };
+  const env = {
+    ...process.env,
+    XDG_CONFIG_HOME: configHome,
+    XDG_STATE_HOME: configHome,
+    XDG_RUNTIME_DIR: configHome,
+  };
   writeExtensionTrust(cwd, "trusted", { env });
   expect(resolveRepoTrust(sibling, { env })).toBe("unknown");
   writeFileSync(join(sibling, "alpha.ts"), "export const siblingBrokerTarget = 42;\n");
@@ -398,6 +403,7 @@ test("enabled trusted launch extensions span real broker-mounted sibling reviews
     env: {
       XDG_CONFIG_HOME: configHome,
       XDG_RUNTIME_DIR: configHome,
+      XDG_STATE_HOME: configHome,
       HUNK_MCP_DISABLE: "0",
       HUNK_MCP_PORT: String(port),
     },

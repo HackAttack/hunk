@@ -40,6 +40,20 @@ afterEach(() => {
 });
 
 describe("extension trust", () => {
+  test("keeps trust decisions across upgrade and writes subsequent decisions to new state", () => {
+    const root = createTempDir("hunk-trust-migration-");
+    const env = { XDG_CONFIG_HOME: join(root, "config"), XDG_STATE_HOME: join(root, "state") };
+    const legacy = join(env.XDG_CONFIG_HOME, "hunk", "state.json");
+    const target = join(env.XDG_STATE_HOME, "hunk", "state.json");
+    const repo = join(root, "repo");
+    writeExtensionTrust(repo, "trusted", { statePath: legacy });
+
+    expect(resolveRepoTrust(repo, { env })).toBe("trusted");
+    writeExtensionTrust(repo, "denied", { env });
+    expect(resolveRepoTrust(repo, { statePath: target })).toBe("denied");
+    expect(resolveRepoTrust(repo, { statePath: legacy })).toBe("trusted");
+  });
+
   test("round-trips trust decisions through the shared state file", () => {
     const stateDir = createTempDir("hunk-trust-state-");
     const statePath = join(stateDir, "state.json");
@@ -145,7 +159,7 @@ describe("extension trust", () => {
     expect(readExtensionTrust({ env: {} })).toEqual({});
     expect(resolveRepoTrust("/repo", { env: {} })).toBe("unknown");
     expect(() => writeExtensionTrust("/repo", "trusted", { env: {} })).toThrow(
-      "HOME/XDG_CONFIG_HOME",
+      "HOME/XDG_STATE_HOME",
     );
   });
 

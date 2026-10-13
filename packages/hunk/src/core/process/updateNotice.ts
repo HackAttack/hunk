@@ -6,7 +6,7 @@ import {
   type FetchImpl,
   type UpdateChannel,
 } from "../install/latestRelease";
-import { resolveAppStatePath } from "../run/paths";
+import { prepareAppStatePath } from "./appStateLocation";
 import type { StartupNotice } from "./startupNotice";
 import {
   isComparableVersion,
@@ -194,7 +194,7 @@ function resolveStartupSkillRefreshNotice(deps: UpdateNoticeDeps = {}): StartupN
     return null;
   }
 
-  const statePath = deps.statePath ?? resolveAppStatePath(deps.env ?? process.env);
+  const statePath = deps.statePath ?? prepareAppStatePath(deps.env ?? process.env);
   if (!statePath) {
     return null;
   }
@@ -246,7 +246,7 @@ export async function resolveStartupUpdateNotice(
     return null;
   }
 
-  const statePath = deps.statePath ?? resolveAppStatePath(env);
+  const statePath = deps.statePath ?? prepareAppStatePath(env);
   if (statePath && !claimStartupReleaseCheck(statePath, (deps.now ?? Date.now)())) {
     return null;
   }

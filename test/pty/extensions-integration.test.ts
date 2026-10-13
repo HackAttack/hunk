@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createPtyHarness, dragMouse, lineIndexOf } from "./harness";
@@ -460,6 +460,46 @@ describe("PTY extensions", () => {
       const frame = await session.waitForText(/ordinary/, { timeout: 20_000 });
       expect(frame).not.toContain("OPEN · #123");
       expect(frame).not.toContain("Review info");
+    } finally {
+      session.close();
+    }
+  });
+
+  test("upgrading migrates remembered trust without prompting or moving global extensions", async () => {
+    const configHome = harness.createIsolatedConfigHome();
+    const stateHome = harness.createIsolatedConfigHome();
+    const fixture = harness.createRepoExtensionFixture(TRANSFORM_EXTENSION_SOURCE);
+    mkdirSync(join(configHome, "hunk"), { recursive: true });
+    const legacyPath = join(configHome, "hunk", "state.json");
+    const legacy = JSON.stringify({ extensionTrust: { [trustKey(fixture.dir)]: "trusted" } });
+    writeFileSync(legacyPath, legacy);
+    const globalDir = join(configHome, "hunk", "extensions");
+    mkdirSync(globalDir);
+    writeFileSync(
+      join(globalDir, "global.ts"),
+      `export default function (hunk) {
+  hunk.on("startup", (_event, ctx) => ctx.notify("GLOBAL CONFIG EXTENSION ACTIVE"));
+}`,
+    );
+    const session = await harness.launchHunk({
+      args: ["diff", "--mode", "unified"],
+      cwd: fixture.dir,
+      cols: 140,
+      rows: 24,
+      env: { XDG_CONFIG_HOME: configHome, XDG_STATE_HOME: stateHome },
+    });
+
+    try {
+      const snapshot = await harness.waitForSnapshot(
+        session,
+        (text) =>
+          text.includes("REPO EXTENSION ACTIVE") && text.includes("GLOBAL CONFIG EXTENSION ACTIVE"),
+        20_000,
+      );
+      expect(snapshot).not.toContain("Run this repository's extensions?");
+      expect(readTrustState(stateHome)[trustKey(fixture.dir)]).toBe("trusted");
+      expect(readFileSync(legacyPath, "utf8")).toBe(legacy);
+      expect(existsSync(join(stateHome, "hunk", "extensions"))).toBe(false);
     } finally {
       session.close();
     }

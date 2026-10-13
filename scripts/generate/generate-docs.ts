@@ -306,6 +306,8 @@ Layers apply from lowest to highest precedence:
 
 The user path is \`$XDG_CONFIG_HOME/hunk/config.toml\` when configured. Otherwise Hunk uses \`$HOME/.config/hunk/config.toml\` or \`%USERPROFILE%/.config/hunk/config.toml\`; if none of those environment variables are set, no user config is loaded. Custom theme tables are root-only; preference keys may appear at top level, in a command table, or in \`[pager]\`.
 
+Persistent application state uses an absolute \`$XDG_STATE_HOME/hunk/state.json\`, falling back to \`~/.local/state/hunk/state.json\` (or the platform home equivalent). On first use, Hunk copies legacy state from the config directory only when the new file is absent, retains the original, and continues using it if migration fails. Existing new state always takes precedence. Global extensions remain in \`$XDG_CONFIG_HOME/hunk/extensions/\` or \`~/.config/hunk/extensions/\`.
+
 ## Preference keys
 
 ${optionBlocks.join("\n\n---\n\n")}
