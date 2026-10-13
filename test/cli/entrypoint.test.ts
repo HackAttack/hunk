@@ -192,6 +192,30 @@ describe("CLI entrypoint contracts", () => {
     expect(stdout).not.toContain("\u001b[?1049h");
   });
 
+  test("prints bundled skill instructions without terminal takeover sequences", () => {
+    for (const [requested, name] of [
+      [[], "hunk-review"],
+      [["extensions"], "hunk-extensions"],
+    ] as const) {
+      const proc = Bun.spawnSync(
+        ["bun", "run", "packages/hunk/src/main.tsx", "skill", "show", ...requested],
+        { cwd: process.cwd(), stdin: "ignore", stdout: "pipe", stderr: "pipe" },
+      );
+
+      const stdout = Buffer.from(proc.stdout).toString("utf8");
+      const stderr = Buffer.from(proc.stderr).toString("utf8");
+      const bundled = readFileSync(
+        join(process.cwd(), "packages", "hunk", "skills", name, "SKILL.md"),
+        "utf8",
+      );
+
+      expect(proc.exitCode).toBe(0);
+      expect(stderr).toBe("");
+      expect(stdout).toBe(bundled);
+      expect(stdout).not.toContain("\u001b[?1049h");
+    }
+  });
+
   test("bin wrapper prints the bundled skill path for hunk skill path", () => {
     const proc = Bun.spawnSync(["node", "packages/hunk/bin/hunk.cjs", "skill", "path"], {
       cwd: process.cwd(),

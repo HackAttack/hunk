@@ -281,6 +281,18 @@ print a bundled Hunk skill path
 hunk skill path [name]
 ```
 
+## `hunk skill show`
+
+print a bundled Hunk skill
+
+### Usage
+
+```bash
+hunk skill show [name]
+```
+
+Prints the full SKILL.md shipped with the installed Hunk version. Pointer skills installed with `npx skills add modem-dev/hunk` run this command to load their instructions, so the text always matches the installed CLI.
+
 ## `hunk extension install`
 
 install a shared extension from Git or npm

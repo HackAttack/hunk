@@ -25,8 +25,8 @@ const DOCUMENTED_AGENT_FLAGS = new Set([
   ...Object.values(AUXILIARY_AGENT_OPTIONS).map(agentOptionFlagName),
 ]);
 
-/** Flags of non-hunk shell tools that appear inside doc examples (e.g. curl). */
-const NON_HUNK_SHELL_FLAGS = new Set(["--data"]);
+/** Flags of non-Hunk tools used in workflow examples (curl and the skills CLI). */
+const NON_HUNK_SHELL_FLAGS = new Set(["--data", "--skill"]);
 
 /** Normalize checkout line endings so the comparison stays portable on Windows. */
 function normalizeNewlines(text: string) {
