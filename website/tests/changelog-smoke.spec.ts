@@ -1,12 +1,16 @@
-import { expect, test } from "@playwright/test";
 import { readFileSync } from "node:fs";
+import { expect, test } from "@playwright/test";
 
-// Release channels change independently of this test; verify the browser preserves published labels.
-const changelogIndex = readFileSync(
-  new URL("../src/content/docs/changelog/index.md", import.meta.url),
-  "utf8",
-);
-const prereleaseSeriesCount = changelogIndex.match(/^Prerelease ·/gm)?.length ?? 0;
+/** Read the published series metadata that the browser must render, including prereleases. */
+function readTestChangelogSeries() {
+  const index = readFileSync(
+    new URL("../src/content/docs/changelog/index.md", import.meta.url),
+    "utf8",
+  );
+  return [...index.matchAll(/^## \[(Hunk \d+\.\d+)\]\(([^)]+)\)\r?\n\r?\n([^\r\n]+)/gm)].map(
+    ([, title, href, metadata]) => ({ title: title!, href: href!, metadata: metadata! }),
+  );
+}
 
 test("the changelog is reachable from the main navigation", async ({ page }, testInfo) => {
   await page.goto("/");
@@ -118,7 +122,21 @@ test("the index lists every series newest first and links each one", async ({ pa
     expect(major > nextMajor || (major === nextMajor && minor > nextMinor)).toBe(true);
   }
 
-  await expect(page.getByText(/^Prerelease ·/)).toHaveCount(prereleaseSeriesCount);
+  // The generated index can contain prerelease-only series ahead of the latest stable one.
+  // Generator unit tests own badge policy; this smoke test checks the published rendering.
+  const publishedSeries = readTestChangelogSeries();
+  expect(labels).toEqual(publishedSeries.map((series) => series.title));
+  for (const series of publishedSeries) {
+    await expect(
+      page
+        .getByRole("heading", { level: 2 })
+        .getByRole("link", { name: series.title, exact: true }),
+    ).toHaveAttribute("href", series.href);
+    await expect(page.getByText(series.metadata, { exact: true })).toHaveCount(1);
+  }
+  await expect(page.getByText(/^Prerelease ·/)).toHaveCount(
+    publishedSeries.filter((series) => series.metadata.startsWith("Prerelease ·")).length,
+  );
   await expect(page.getByText(/^Latest ·/)).toHaveCount(1);
 });
 
