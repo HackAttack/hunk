@@ -1811,13 +1811,16 @@ export interface ExtensionPaneControls {
    * resolve replacement slots; execute `hunk.view.toggleFilesPane` through
    * command controls for the active files role.
    *
-   * Opening a left/right pane (here, or via `toggle`) also reveals the sidebar
-   * area when it is hidden, so the open is never silent.
+   * Opening a left/right pane (here, or via `toggle`) reveals only its own
+   * edge when responsively hidden, without changing the opposite edge.
    */
   open(viewId: string): void;
   close(viewId: string): void;
   toggle(viewId: string): void;
+  /** Report the logical open preference, even when layout or availability hides the pane. */
   isOpen(viewId: string): boolean;
+  /** Report whether the pane occupies the current committed layout; stale controls return false. */
+  isVisible(viewId: string): boolean;
 }
 /** @deprecated Use ExtensionPaneControls. */
 export type ExtensionSidebarControls = ExtensionPaneControls;

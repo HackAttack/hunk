@@ -210,6 +210,7 @@ describe("extension event dispatch", () => {
         close: () => {},
         toggle: () => {},
         isOpen: () => false,
+        isVisible: () => false,
       };
       return {
         cwd: "/repo",

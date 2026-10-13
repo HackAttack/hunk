@@ -1954,10 +1954,24 @@ plus `ctx.panes`, the controls for opening panes:
   registrations directly; they do not resolve a replacement slot. To toggle
   whichever pane currently owns the files role,
   call `ctx.commands.execute("hunk.view.toggleFilesPane")`. Opening a left/right
-  pane also reveals the sidebar area when responsive layout has hidden it;
-  top/bottom pane state is independent of that area.
+  pane also reveals its own edge when responsive layout has hidden it, without
+  revealing the opposite edge or changing other panes' logical open preferences.
+  Top/bottom pane state is independent of the side edges.
 - `ctx.panes.isOpen(paneId)` reports the logical open preference, including
-  while availability or terminal bounds temporarily omit the pane.
+  while availability or terminal bounds temporarily omit the pane. `toggle()`
+  toggles this logical preference.
+- `ctx.panes.isVisible(paneId)` reports whether the pane occupies the current
+  committed layout, accounting for responsive hiding, availability, failures,
+  and terminal bounds. Unknown panes and stale controls return `false`.
+  To toggle rendered visibility without touching other panes:
+
+  ```ts
+  if (ctx.panes.isVisible("guide")) ctx.panes.close("guide");
+  else ctx.panes.open("guide");
+  ```
+
+  Opening still respects availability and minimum review dimensions; it cannot
+  force a pane to render when there is insufficient room.
 
 `ctx.selection` is where the review was pointing when the command fired — the
 same selection a pane component sees in its props, so a command never has to

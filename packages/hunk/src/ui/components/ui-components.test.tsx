@@ -1441,6 +1441,8 @@ describe("UI components", () => {
         navigateToSecondHunk?.();
         await setup.renderOnce();
       });
+      // Let navigation's deferred viewport read clear hover before starting mouse input.
+      await settleDiffPane(setup);
       const secondHunkFrame = await waitForFrame(setup, (frame) => frame.includes("line60"), 12);
       const secondHunkY = secondHunkFrame.split("\n").findIndex((line) => line.includes("line60"));
       expect(secondHunkY).toBeGreaterThanOrEqual(0);

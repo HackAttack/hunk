@@ -309,6 +309,7 @@ function unavailablePaneControls(
     close: (viewId) => unavailable("close", viewId),
     toggle: (viewId) => unavailable("toggle", viewId),
     isOpen: () => false,
+    isVisible: () => false,
   };
 }
 

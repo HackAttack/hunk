@@ -162,6 +162,23 @@ export default function (hunk) {
 }
 `;
 
+/** Toggle rendered guide visibility while retaining the files pane's responsive state. */
+const INDEPENDENT_GUIDE_EXTENSION_SOURCE = `import { createElement } from "react";
+export default function (hunk) {
+  hunk.registerPane({
+    id: "guide",
+    placement: "right",
+    defaultOpen: true,
+    width: { preferred: 24, min: 16 },
+    component: () => createElement("text", { content: "INDEPENDENT GUIDE" }),
+  });
+  hunk.registerCommand({ id: "toggle", title: "Toggle guide", key: "Y" }, (ctx) => {
+    if (ctx.panes.isVisible("guide")) ctx.panes.close("guide");
+    else ctx.panes.open("guide");
+  });
+}
+`;
+
 /** A scrollable pane that records host activation from its buffered content. */
 const PANE_ACTIVATION_EXTENSION_SOURCE = `import { appendFileSync } from "node:fs";
 import { createElement } from "react";
@@ -752,6 +769,48 @@ export default function (hunk) {
       // The same key toggles it away again.
       session.writeRaw("Y");
       await harness.waitForSnapshot(session, (text) => !text.includes("EXTSIDEBAR"), 20_000);
+    } finally {
+      session.close();
+    }
+  });
+
+  test("a guide visibility toggle leaves the responsively hidden files pane alone", async () => {
+    const configHome = harness.createIsolatedConfigHome();
+    const fixture = harness.createRepoExtensionFixture(INDEPENDENT_GUIDE_EXTENSION_SOURCE);
+    const session = await harness.launchHunk({
+      args: [
+        "diff",
+        "--mode",
+        "unified",
+        "--extension",
+        join(fixture.dir, ".hunk", "extensions", "fixture.ts"),
+      ],
+      cwd: fixture.dir,
+      cols: 120,
+      rows: 24,
+      env: { XDG_CONFIG_HOME: configHome },
+    });
+    try {
+      const before = await session.waitForText(/alpha.ts/, { timeout: 20_000 });
+      expect(before).not.toContain("INDEPENDENT GUIDE");
+      const fileOccurrences = (text: string) => (text.match(/alpha\.ts/g) ?? []).length;
+      const initialOccurrences = fileOccurrences(before);
+      await harness.ensureKeyboardIsLive(session);
+
+      session.writeRaw("Y");
+      const opened = await session.waitForText(/INDEPENDENT GUIDE/, { timeout: 20_000 });
+      expect(fileOccurrences(opened)).toBe(initialOccurrences);
+
+      session.writeRaw("Y");
+      const closed = await harness.waitForSnapshot(
+        session,
+        (text) => !text.includes("INDEPENDENT GUIDE"),
+        20_000,
+      );
+      expect(fileOccurrences(closed)).toBe(initialOccurrences);
+
+      session.writeRaw("Y");
+      await session.waitForText(/INDEPENDENT GUIDE/, { timeout: 20_000 });
     } finally {
       session.close();
     }

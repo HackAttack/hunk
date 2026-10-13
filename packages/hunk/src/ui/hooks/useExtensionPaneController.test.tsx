@@ -187,6 +187,160 @@ async function destroy(setup: Awaited<ReturnType<typeof testRender>>) {
 }
 
 describe("useExtensionPaneController", () => {
+  test("reveals the right edge without changing hidden files preferences", async () => {
+    const guide = registeredPane("meta", "guide", {
+      placement: "right",
+      defaultOpen: true,
+      width: { preferred: 20, min: 10 },
+    });
+    const harness = await renderController({
+      extensions: loadResultWith([guide]),
+      initialResponsiveShowsSidebar: false,
+    });
+    try {
+      const controls = harness.current().createPaneControls("meta");
+      expect(controls.isOpen("guide")).toBeTrue();
+      expect(controls.isVisible("guide")).toBeFalse();
+      expect(controls.isOpen("hunk:files")).toBeTrue();
+      expect(controls.isVisible("hunk:files")).toBeFalse();
+
+      await act(async () => controls.open("guide"));
+      await harness.settle();
+      expect(controls.isVisible("guide")).toBeTrue();
+      expect(controls.isVisible("hunk:files")).toBeFalse();
+      expect(controls.isOpen("hunk:files")).toBeTrue();
+
+      await act(async () => harness.setSize({ width: 60, height: 30 }));
+      await harness.settle();
+      expect(controls.isOpen("guide")).toBeTrue();
+      expect(controls.isVisible("guide")).toBeFalse();
+
+      await act(async () => harness.setSize({ width: 100, height: 30 }));
+      await harness.settle();
+      expect(controls.isVisible("guide")).toBeTrue();
+      expect(controls.isVisible("hunk:files")).toBeFalse();
+
+      await act(async () => controls.close("guide"));
+      await harness.settle();
+      expect(controls.isVisible("guide")).toBeFalse();
+      expect(controls.isOpen("hunk:files")).toBeTrue();
+      expect(controls.isVisible("hunk:files")).toBeFalse();
+
+      await act(async () => harness.current().toggleFilesPane());
+      await harness.settle();
+      expect(controls.isVisible("hunk:files")).toBeTrue();
+      expect(controls.isOpen("guide")).toBeFalse();
+      expect(controls.isVisible("guide")).toBeFalse();
+      expect(controls.isVisible("missing")).toBeFalse();
+      harness.retire();
+      expect(controls.isVisible("hunk:files")).toBeFalse();
+    } finally {
+      await destroy(harness.setup);
+    }
+  });
+
+  test("reveals files without revealing a logically open right pane", async () => {
+    const harness = await renderController({
+      extensions: loadResultWith([
+        registeredPane("meta", "guide", {
+          placement: "right",
+          defaultOpen: true,
+        }),
+      ]),
+      initialResponsiveShowsSidebar: false,
+    });
+    try {
+      const controls = harness.current().createPaneControls("meta");
+      await act(async () => controls.open("hunk:files"));
+      await harness.settle();
+      expect(controls.isVisible("hunk:files")).toBeTrue();
+      expect(controls.isOpen("guide")).toBeTrue();
+      expect(controls.isVisible("guide")).toBeFalse();
+    } finally {
+      await destroy(harness.setup);
+    }
+  });
+
+  test("launch-time files reveal follows a right-edge replacement only", async () => {
+    const harness = await renderController({
+      extensions: loadResultWith([
+        registeredPane("meta", "files", { placement: "right", replaces: HUNK_FILES_PANE_KEY }),
+        registeredPane("meta", "aux", { placement: "left", defaultOpen: true }),
+      ]),
+      initialResponsiveShowsSidebar: false,
+      initialSidebar: true,
+    });
+    try {
+      const controls = harness.current().createPaneControls("meta");
+      expect(controls.isVisible("files")).toBeTrue();
+      expect(controls.isOpen("aux")).toBeTrue();
+      expect(controls.isVisible("aux")).toBeFalse();
+    } finally {
+      await destroy(harness.setup);
+    }
+  });
+
+  test("recovers a right-side render failure without revealing unrelated left panes", async () => {
+    const replacement = registeredPane("meta", "files", {
+      placement: "right",
+      replaces: HUNK_FILES_PANE_KEY,
+    });
+    const aux = registeredPane("meta", "aux", { placement: "left", defaultOpen: true });
+    const harness = await renderController({
+      extensions: loadResultWith([replacement, aux]),
+      initialResponsiveShowsSidebar: false,
+      initialSidebar: true,
+    });
+    try {
+      const controls = harness.current().createPaneControls("meta");
+      const planned = harness
+        .current()
+        .paneLayout.panes.find(({ pane }) => pane.key === "meta:files");
+      expect(planned).toBeDefined();
+      expect(controls.isVisible("aux")).toBeFalse();
+
+      await act(async () => harness.current().reportPaneRenderFailure(planned!.pane));
+      await harness.settle();
+      expect(controls.isVisible("hunk:files")).toBeTrue();
+      expect(controls.isOpen("files")).toBeFalse();
+      expect(controls.isVisible("files")).toBeFalse();
+      expect(controls.isOpen("aux")).toBeTrue();
+      expect(controls.isVisible("aux")).toBeFalse();
+
+      await act(async () => harness.current().toggleFilesPane());
+      await harness.settle();
+      expect(controls.isVisible("hunk:files")).toBeFalse();
+      expect(controls.isVisible("aux")).toBeFalse();
+    } finally {
+      await destroy(harness.setup);
+    }
+  });
+
+  test("restores built-in files after a revealed right replacement fails availability", async () => {
+    const harness = await renderController({
+      extensions: loadResultWith([
+        registeredPane("meta", "files", {
+          placement: "right",
+          replaces: HUNK_FILES_PANE_KEY,
+          available: () => {
+            throw new Error("unavailable");
+          },
+        }),
+        registeredPane("meta", "aux", { placement: "left", defaultOpen: true }),
+      ]),
+      initialResponsiveShowsSidebar: false,
+      initialSidebar: true,
+    });
+    try {
+      const controls = harness.current().createPaneControls("meta");
+      expect(controls.isVisible("hunk:files")).toBeTrue();
+      expect(controls.isVisible("aux")).toBeFalse();
+      expect(controls.isVisible("files")).toBeFalse();
+    } finally {
+      await destroy(harness.setup);
+    }
+  });
+
   test("probes availability after commit and keeps false panes logically open", async () => {
     let available = false;
     let calls = 0;
@@ -209,6 +363,7 @@ describe("useExtensionPaneController", () => {
         harness.current().paneLayout.panes.some(({ pane }) => pane.key === "meta:detail"),
       ).toBeFalse();
       expect(harness.current().createPaneControls("meta").isOpen("detail")).toBeTrue();
+      expect(harness.current().createPaneControls("meta").isVisible("detail")).toBeFalse();
       expect(harness.warnings).toEqual([]);
 
       available = true;

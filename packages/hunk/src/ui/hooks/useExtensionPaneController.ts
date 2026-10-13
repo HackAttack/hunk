@@ -163,10 +163,16 @@ export function useExtensionPaneController({
   );
   const [paneSizeOverrides, setPaneSizeOverrides] = useState<Record<string, PaneSizeOverride>>({});
   const [paneResize, setPaneResize] = useState<PaneResizeState | null>(null);
-  const [sidebarVisible, setSidebarVisible] = useState(() => !pagerMode);
-  const [forceSidebarOpen, setForceSidebarOpen] = useState(
-    () => !pagerMode && initialSidebar === true,
-  );
+  const [revealedEdges, setRevealedEdges] = useState(() => {
+    const filesKey = resolvePaneSlotKey({
+      panes: sessionPanes,
+      slotKey: HUNK_FILES_PANE_KEY,
+      openKeys: initialOpenState(sessionPanes, initialSidebar).open,
+    });
+    const edge = sessionPanes.find((pane) => pane.key === filesKey)?.placement;
+    const revealFiles = !pagerMode && initialSidebar === true;
+    return { left: revealFiles && edge === "left", right: revealFiles && edge === "right" };
+  });
   const [currentLinePaintState, setCurrentLinePaintState] =
     useState<ExtensionCurrentLinePaintState>({
       status: "unavailable",
@@ -188,6 +194,7 @@ export function useExtensionPaneController({
   const responsiveRef = useRef({ canForceShowSidebar, responsiveShowsSidebar });
   const retainedCurrentLinePaneRegistrationsRef = useRef<ReadonlySet<RegisteredPane>>(new Set());
   const quarantinedRef = useRef(new WeakSet<RegisteredPane>());
+  const renderFailedFilesReplacementRef = useRef<RegisteredPane | null>(null);
   const reportedAvailabilityFailuresRef = useRef(new WeakSet<RegisteredPane>());
   const lastAvailabilityProbeRef = useRef<{
     request: AvailabilityRequest;
@@ -232,14 +239,14 @@ export function useExtensionPaneController({
     setCurrentLinePaintState((current) => applyExtensionCurrentLinePaintUpdate(current, update));
   }, []);
 
-  // Opening a side pane reveals its terminal area when responsive layout allows it.
-  const revealSidebarArea = useCallback(() => {
-    setSidebarVisible(true);
-    const responsive = responsiveRef.current;
-    if (!responsive.responsiveShowsSidebar && responsive.canForceShowSidebar) {
-      setForceSidebarOpen(true);
-    }
-  }, []);
+  // Reveal only the requested edge; the opposite edge retains its responsive preference.
+  const revealSidebarEdge = useCallback(
+    (edge: "left" | "right") => {
+      if (!pagerMode && responsiveRef.current.responsiveShowsSidebar) return;
+      setRevealedEdges((current) => (current[edge] ? current : { ...current, [edge]: true }));
+    },
+    [pagerMode],
+  );
 
   const cancelResize = useCallback((key?: string) => {
     const active = paneResizeRef.current;
@@ -290,7 +297,9 @@ export function useExtensionPaneController({
       };
       const revealIfSide = (key: string) => {
         const pane = sessionPanesRef.current.find((entry) => entry.key === key);
-        if (pane?.placement === "left" || pane?.placement === "right") revealSidebarArea();
+        if (pane?.placement === "left" || pane?.placement === "right") {
+          revealSidebarEdge(pane.placement);
+        }
       };
       return {
         open(id) {
@@ -318,26 +327,42 @@ export function useExtensionPaneController({
           const key = resolvePaneKey(sessionPanesRef.current, extensionId, id);
           return key !== undefined && paneOpenStateRef.current.open.includes(key);
         },
+        isVisible(id) {
+          if (!lease.isLive()) return false;
+          const key = resolvePaneKey(sessionPanesRef.current, extensionId, id);
+          return (
+            key !== undefined &&
+            (paneLayoutRef.current?.panes.some(({ pane }) => pane.key === key) ?? false)
+          );
+        },
       };
     },
-    [createReviewCapabilityLease, notifyWarning, revealSidebarArea, setPaneOpen],
+    [createReviewCapabilityLease, notifyWarning, revealSidebarEdge, setPaneOpen],
   );
 
-  const sidebarAreaVisible =
-    sidebarVisible && (responsiveShowsSidebar || (forceSidebarOpen && canForceShowSidebar));
-  const failedFilesReplacement = sessionPanes.some(
+  /** Apply responsive visibility and explicit reveal independently to each side edge. */
+  const edgeVisible = (edge: "left" | "right") =>
+    (!pagerMode && responsiveShowsSidebar) || (revealedEdges[edge] && canForceShowSidebar);
+  const failedFilesReplacement = sessionPanes.find(
     (pane) =>
-      committedPaneOpenState.open.includes(pane.key) &&
+      (committedPaneOpenState.open.includes(pane.key) ||
+        (pane.registered === renderFailedFilesReplacementRef.current &&
+          committedPaneOpenState.open.includes(HUNK_FILES_PANE_KEY))) &&
       pane.registered.pane.replaces === HUNK_FILES_PANE_KEY &&
       quarantinedRef.current.has(pane.registered),
   );
   const effectiveOpenPaneKeys = committedPaneOpenState.open.filter((key) => {
     const pane = sessionPanes.find((entry) => entry.key === key);
-    return sidebarAreaVisible || (pane?.placement !== "left" && pane?.placement !== "right");
+    return pane?.placement === "left" || pane?.placement === "right"
+      ? edgeVisible(pane.placement)
+      : true;
   });
+  // Restore the failed files role without revealing other panes on the fallback edge.
   if (
     failedFilesReplacement &&
-    sidebarAreaVisible &&
+    (failedFilesReplacement.placement === "left" || failedFilesReplacement.placement === "right"
+      ? edgeVisible(failedFilesReplacement.placement)
+      : true) &&
     !effectiveOpenPaneKeys.includes(HUNK_FILES_PANE_KEY)
   ) {
     effectiveOpenPaneKeys.push(HUNK_FILES_PANE_KEY);
@@ -490,11 +515,11 @@ export function useExtensionPaneController({
       openKeys: visibleKeys,
       quarantined: quarantinedRef.current,
     });
-    if (
-      visibleKeys.includes(visibleFilesPaneKey) &&
-      visibleFilesPaneKey === HUNK_FILES_PANE_KEY &&
-      !logicalOpenKeys.includes(HUNK_FILES_PANE_KEY)
-    ) {
+    if (visibleKeys.includes(visibleFilesPaneKey) && visibleFilesPaneKey === HUNK_FILES_PANE_KEY) {
+      if (logicalOpenKeys.includes(HUNK_FILES_PANE_KEY)) {
+        setPaneOpen(HUNK_FILES_PANE_KEY, false);
+        return;
+      }
       const failedReplacement = panes.find(
         (pane) =>
           logicalOpenKeys.includes(pane.key) &&
@@ -516,16 +541,17 @@ export function useExtensionPaneController({
     const filesPane = panes.find((pane) => pane.key === filesPaneKey);
     const usesSidebarArea = filesPane?.placement === "left" || filesPane?.placement === "right";
     const responsive = responsiveRef.current;
+    const edge = filesPane?.placement === "right" ? "right" : "left";
     const areaVisible =
-      sidebarVisible &&
-      (responsive.responsiveShowsSidebar || (forceSidebarOpen && responsive.canForceShowSidebar));
+      (!pagerMode && responsive.responsiveShowsSidebar) ||
+      (revealedEdges[edge] && responsive.canForceShowSidebar);
     if (usesSidebarArea && !areaVisible) {
       setPaneOpen(filesPaneKey, true);
-      revealSidebarArea();
+      revealSidebarEdge(edge);
       return;
     }
     setPaneOpen(filesPaneKey, "toggle");
-  }, [forceSidebarOpen, revealSidebarArea, setPaneOpen, sidebarVisible]);
+  }, [pagerMode, revealedEdges, revealSidebarEdge, setPaneOpen]);
 
   // Quarantine a pane that failed to render and restore the built-in files pane if needed.
   const reportPaneRenderFailure = useCallback(
@@ -533,13 +559,14 @@ export function useExtensionPaneController({
       quarantinedRef.current.add(pane.registered);
       cancelResize(pane.key);
       if (pane.registered.pane.replaces === HUNK_FILES_PANE_KEY) {
+        // Keep recovery tied to this registration and its edge, not every left pane.
+        renderFailedFilesReplacementRef.current = pane.registered;
         setPaneOpen(pane.key, false);
         setPaneOpen(HUNK_FILES_PANE_KEY, true);
-        revealSidebarArea();
       }
       setPaneFailureEpoch((value) => value + 1);
     },
-    [cancelResize, revealSidebarArea, setPaneOpen],
+    [cancelResize, setPaneOpen],
   );
 
   // Start a drag only for the divider still owned by this exact pane registration.
