@@ -117,6 +117,15 @@ export const EXTENSION_CATALOG: readonly ExtensionListing[] = [
     apiVersion: 6,
   },
   {
+    repo: "bottercode/hunk-why",
+    name: "hunk-why",
+    summary:
+      "Adds a `why` command that opens the working-tree review with notes explaining why Claude Code wrote each hunk, read from its local transcripts.",
+    categories: ["Command"],
+    version: "0.1.0",
+    apiVersion: 10,
+  },
+  {
     repo: "brettinternet/hunk-guide",
     name: "hunk-guide",
     summary:
