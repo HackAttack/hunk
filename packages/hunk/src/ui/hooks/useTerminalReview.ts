@@ -44,6 +44,7 @@ import { reviewExpansionSide } from "../../core/review/expansion";
 import { reviewHunkIndexForLine } from "../../core/review/geometry";
 import {
   planReviewSelectionMove,
+  REVIEW_FILE_JUMP_HUNK_INDEX,
   type ReviewSelectionScope,
   type ReviewNavigationFile,
 } from "../../core/review/navigation";
@@ -575,12 +576,17 @@ export function useTerminalReview({
         const fileKey = keyByFileId.get(file.id);
         if (!fileKey) return [];
         const hunkIndexes = visibleHunkIndexesByFileId?.get(file.id);
-        const indexes = hunkIndexes
-          ? [...hunkIndexes].sort((left, right) => left - right)
-          : file.metadata.hunks.map((_hunk, index) => index);
-        return indexes.length > 0
-          ? [{ fileKey, hunkCount: indexes.length, hunkIndexes: indexes }]
-          : [];
+        // A presentation scope that leaves a file no hunks hides it from navigation. Without a
+        // scope, files with no hunks at all (binary, skipped) stay navigable: file moves and
+        // file jumps land on them, while hunk moves pass over them because they add no cursors.
+        if (hunkIndexes) {
+          const indexes = [...hunkIndexes].sort((left, right) => left - right);
+          return indexes.length > 0
+            ? [{ fileKey, hunkCount: indexes.length, hunkIndexes: indexes }]
+            : [];
+        }
+        const indexes = file.metadata.hunks.map((_hunk, index) => index);
+        return [{ fileKey, hunkCount: indexes.length, hunkIndexes: indexes }];
       }),
     [keyByFileId, visibleFiles, visibleHunkIndexesByFileId],
   );
@@ -710,13 +716,13 @@ export function useTerminalReview({
   const selectVisibleFile = useCallback(
     (fileId: string, options?: ReviewSelectionOptions) => {
       const fileKey = keyByFileId.get(fileId);
-      const firstVisibleHunk = projectedNavigationFiles.find((file) => file.fileKey === fileKey)
-        ?.hunkIndexes?.[0];
-      if (!fileKey || firstVisibleHunk === undefined) return;
+      const navigationFile = projectedNavigationFiles.find((file) => file.fileKey === fileKey);
+      if (!fileKey || !navigationFile) return;
+      // A file without hunks (binary, skipped) is still selectable, like a core file jump.
       runIntent({
         type: "selection/select",
         fileKey,
-        hunkIndex: firstVisibleHunk,
+        hunkIndex: navigationFile.hunkIndexes?.[0] ?? REVIEW_FILE_JUMP_HUNK_INDEX,
         reveal: revealRequestFor(options),
       });
     },

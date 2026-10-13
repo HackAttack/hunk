@@ -2,6 +2,7 @@ import { describe, expect, spyOn, test } from "bun:test";
 import { testRender } from "@opentui/react/test-utils";
 import { act, StrictMode, useEffect, useMemo, useRef, useState } from "react";
 import { builtinAppCommand } from "../../core/run/commandCatalog";
+import { createSkippedBinaryMetadata } from "../../core/changeset/binary";
 import { SourceTextTooLargeError } from "../../core/changeset/fileSource";
 import type { DiffFile } from "../../core/changeset/model";
 import type { ExtensionReviewPresentationScope } from "../../extension-api/types";
@@ -100,6 +101,16 @@ function createAlphaFile(sourceFetcher?: DiffFile["sourceFetcher"]) {
     null,
     sourceFetcher,
   );
+}
+
+/** Build one binary file the way the changeset loaders do: placeholder metadata, no hunks. */
+function createBinaryFile(id = "image", path = "logo.png"): DiffFile {
+  return {
+    ...createTestDiffFile({ id, path }),
+    metadata: createSkippedBinaryMetadata(path, "change"),
+    stats: { additions: 0, deletions: 0 },
+    isBinary: true,
+  };
 }
 
 /**
@@ -291,6 +302,62 @@ async function renderTerminalReview(
 }
 
 describe("useTerminalReview", () => {
+  test("keeps files without hunks reachable by file moves and file jumps", async () => {
+    const { controllerRef, setup } = await renderTerminalReview([
+      createAlphaFile(),
+      createBinaryFile(),
+    ]);
+
+    try {
+      await flush(setup);
+      const controller = expectValue(controllerRef.current);
+      expect(controller.selectedFileId).toBe("alpha");
+
+      // Hunk moves pass over the binary file: it has no hunk to land on.
+      await act(async () => controller.moveSelection("hunk", 1));
+      await flush(setup);
+      expect(expectValue(controllerRef.current).selectedFileId).toBe("alpha");
+
+      await act(async () => controller.moveSelection("file", 1));
+      await flush(setup);
+      expect(expectValue(controllerRef.current).selectedFileId).toBe("image");
+
+      await act(async () => controller.moveSelection("file", -1));
+      await flush(setup);
+      expect(expectValue(controllerRef.current).selectedFileId).toBe("alpha");
+
+      await act(async () => controller.selectVisibleFile("image"));
+      await flush(setup);
+      expect(expectValue(controllerRef.current).selectedFileId).toBe("image");
+    } finally {
+      await act(async () => setup.renderer.destroy());
+    }
+  });
+
+  test("keeps files without hunks out of a presentation scope that omits them", async () => {
+    const { controllerRef, setup } = await renderTerminalReview(
+      [createAlphaFile(), createBinaryFile()],
+      {
+        presentationScope: {
+          generation: "generation-1",
+          files: [{ fileId: "alpha", hunkIndexes: [0] }],
+        },
+      },
+    );
+
+    try {
+      await flush(setup);
+      const controller = expectValue(controllerRef.current);
+
+      await act(async () => controller.selectVisibleFile("image"));
+      await act(async () => controller.moveSelection("file", 1));
+      await flush(setup);
+      expect(expectValue(controllerRef.current).selectedFileId).toBe("alpha");
+    } finally {
+      await act(async () => setup.renderer.destroy());
+    }
+  });
+
   test("navigates only projected files and sparse hunks", async () => {
     const { controllerRef, setup } = await renderTerminalReview(
       [createTwoHunkFile(), createTwoHunkFile("beta", "beta.ts")],

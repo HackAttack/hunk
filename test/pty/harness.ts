@@ -838,6 +838,26 @@ end
     };
   }
 
+  /**
+   * Build a binary file between two long text files.
+   *
+   * Each text file has more changed lines than a short terminal shows, so the binary file's
+   * "Binary file skipped" row is only on screen when the selection actually lands there.
+   */
+  function createBinaryNavigationRepoFixture() {
+    const textLines = (name: string, value: number) =>
+      Array.from(
+        { length: 30 },
+        (_unused, index) => `export const ${name}${index} = ${value};\n`,
+      ).join("");
+    return createGitRepoFixture([
+      { path: "alpha.ts", before: textLines("alpha", 1), after: textLines("alpha", 2) },
+      // NUL bytes make Git and Hunk treat the file as binary, so it has no hunks.
+      { path: "logo.png", before: "\u0000PNG before\u0001", after: "\u0000PNG after\u0002" },
+      { path: "zeta.ts", before: textLines("zeta", 1), after: textLines("zeta", 2) },
+    ]);
+  }
+
   function createTwoFileRepoFixture() {
     return createGitRepoFixture([
       {
@@ -1383,6 +1403,7 @@ end
     countMatches,
     createAgentFilePair,
     createAgentNavigationRepoFixture,
+    createBinaryNavigationRepoFixture,
     createGapAnnotatedAgentFilePair,
     createBottomClampedRepoFixture,
     createCollapsedTopRepoFixture,

@@ -254,6 +254,68 @@ describe("PTY navigation", () => {
     }
   });
 
+  test("file navigation lands on a binary file between text files", async () => {
+    const fixture = harness.createBinaryNavigationRepoFixture();
+    const session = await harness.launchHunk({
+      args: ["diff", "--mode", "split"],
+      cwd: fixture.dir,
+      cols: 160,
+      rows: 12,
+    });
+
+    try {
+      const initial = await session.waitForText(/View\s+Navigate\s+Agent\s+Help/, {
+        timeout: 15_000,
+      });
+      expect(initial).not.toContain("Binary file skipped");
+
+      const binary = await harness.pressAndWaitForSnapshot(
+        session,
+        ".",
+        (text) => text.includes("Binary file skipped"),
+        5_000,
+      );
+      expect(binary).toContain("Binary file skipped");
+
+      const zeta = await harness.pressAndWaitForSnapshot(
+        session,
+        ".",
+        (text) => text.includes("zeta0 = 2") && !text.includes("Binary file skipped"),
+        5_000,
+      );
+      expect(zeta).toContain("zeta0 = 2");
+    } finally {
+      session.close();
+    }
+  });
+
+  test("clicking a binary file in the sidebar selects it", async () => {
+    const fixture = harness.createBinaryNavigationRepoFixture();
+    const session = await harness.launchHunk({
+      args: ["diff", "--mode", "split"],
+      cwd: fixture.dir,
+      cols: 160,
+      rows: 12,
+    });
+
+    try {
+      const initial = await session.waitForText(/View\s+Navigate\s+Agent\s+Help/, {
+        timeout: 15_000,
+      });
+      expect(initial).not.toContain("Binary file skipped");
+
+      await session.click(/logo\.png/);
+      const selected = await harness.waitForSnapshot(
+        session,
+        (text) => text.includes("Binary file skipped"),
+        5_000,
+      );
+      expect(selected).toContain("Binary file skipped");
+    } finally {
+      session.close();
+    }
+  });
+
   test("clicking a sidebar file pins that file header to the top in a real PTY", async () => {
     const fixture = harness.createPinnedHeaderRepoFixture();
     const session = await harness.launchHunk({
