@@ -1,4 +1,15 @@
 {
+  "0.24": {
+    "summary": "Hunk 0.24 adds complete-file and directory browsing, a live workspace status view, npm-installed extensions, shell completions, and pane-aware automatic diff layout, while moving syntax highlighting off the review's main thread by default.",
+    "tagline": "Browse files, navigate workspaces, extend from npm",
+    "links": [
+      { "label": "Files and patches", "href": "/docs/workflows/files-and-patches/" },
+      { "label": "CLI reference", "href": "/docs/reference/cli/" },
+      { "label": "Layout and display", "href": "/docs/configure/layout-and-display/" },
+      { "label": "Extensions", "href": "/docs/extend/extensions/" },
+      { "label": "Review with an agent", "href": "/docs/agents/review-with-an-agent/" }
+    ]
+  },
   "0.23": {
     "summary": "Hunk 0.23 brings diff search, bundled GitHub review, an inline status line, and a default theme that follows your terminal, while making daemon version mismatches easier to resolve.",
     "tagline": "Search diffs, review GitHub, follow your terminal",

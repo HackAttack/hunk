@@ -77,7 +77,9 @@ function createWorkingTreeRepo() {
 /** Launch one review in a PTY and time its first frame, first color, and first key answer. */
 async function measureLaunch(cwd: string, configHome: string): Promise<LaunchTiming> {
   const command = explicitExecutable ?? process.execPath;
-  const args = explicitExecutable ? ["diff"] : ["run", sourceEntrypoint, "--", "diff"];
+  // Keep the palette aligned with the keyword-color sentinel regardless of the default theme.
+  const reviewArgs = ["diff", "--theme", "github-dark-default"];
+  const args = explicitExecutable ? reviewArgs : ["run", sourceEntrypoint, "--", ...reviewArgs];
   let output = "";
   let exited = false;
 
