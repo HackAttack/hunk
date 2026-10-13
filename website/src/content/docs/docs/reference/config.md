@@ -129,6 +129,14 @@ Choose diff layout. `auto` uses split on wide terminals and unified on narrow on
 - **Accepted:** `auto`, `split`, `unified`, or deprecated alias `stack`
 - **Built-in default:** `auto`
 
+#### `auto_split_min_width`
+
+Minimum available diff width, in columns, for split diffs in `auto` mode, after side panes and outer padding; narrower diff areas show unified diffs.
+
+- **Type:** integer
+- **Accepted:** a positive number of terminal columns
+- **Built-in default:** `160`
+
 #### `theme`
 
 Select the color theme. `terminal` follows the terminal palette; `auto` chooses a light or dark GitHub theme from the terminal background (dark fallback).

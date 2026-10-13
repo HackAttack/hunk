@@ -349,6 +349,34 @@ describe("config resolution", () => {
     }
   });
 
+  test("defaults auto split minimum width to 160, reads configured values, and rejects invalid ones", () => {
+    const home = createTempDir("hunk-config-auto-split-width-home-");
+    const repo = createTempDir("hunk-config-auto-split-width-repo-");
+    createRepo(repo);
+
+    const input = createPatchPagerInput();
+    const env = { HOME: home };
+    expect(
+      resolveConfiguredCliInput(input, { cwd: repo, env }).input.options.autoSplitMinWidth,
+    ).toBe(160);
+
+    mkdirSync(join(home, ".config", "hunk"), { recursive: true });
+    writeFileSync(join(home, ".config", "hunk", "config.toml"), "auto_split_min_width = 180\n");
+    expect(
+      resolveConfiguredCliInput(input, { cwd: repo, env }).input.options.autoSplitMinWidth,
+    ).toBe(180);
+
+    for (const invalid of ["0", "-1", "150.5", '"200"']) {
+      writeFileSync(
+        join(home, ".config", "hunk", "config.toml"),
+        `auto_split_min_width = ${invalid}\n`,
+      );
+      expect(() => resolveConfiguredCliInput(input, { cwd: repo, env })).toThrow(
+        /auto_split_min_width/,
+      );
+    }
+  });
+
   test("defaults file and hunk gaps and rejects invalid configured values", () => {
     const home = createTempDir("hunk-config-gap-home-");
     const repo = createTempDir("hunk-config-gap-repo-");

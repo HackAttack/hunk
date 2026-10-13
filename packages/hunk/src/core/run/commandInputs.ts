@@ -21,6 +21,9 @@ export const LAYOUT_MODE_VALUES = ["auto", "split", "unified"] as const;
 export type LayoutMode = (typeof LAYOUT_MODE_VALUES)[number];
 export type LayoutModeInput = LayoutMode | "stack";
 
+/** Minimum available diff width, in columns, for split diffs in `auto` mode. */
+export const DEFAULT_AUTO_SPLIT_MIN_WIDTH = 160;
+
 /** Return whether an unknown value uses canonical or deprecated layout vocabulary. */
 export function isLayoutModeInput(value: unknown): value is LayoutModeInput {
   return value === "auto" || value === "split" || value === "unified" || value === "stack";
@@ -38,6 +41,7 @@ export type VcsMode = string;
 
 export interface CommonOptions {
   mode?: LayoutMode;
+  autoSplitMinWidth?: number;
   cursorLine?: CursorLine;
   vcs?: VcsMode;
   theme?: string;

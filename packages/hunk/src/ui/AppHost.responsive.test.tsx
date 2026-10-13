@@ -8,7 +8,11 @@ import { createTestDiffFile } from "../../../../test/helpers/diff-helpers";
 
 const { TestAppHost: AppHost } = await import("../../../../test/helpers/app-host");
 
-function createBootstrap(initialMode: LayoutMode = "auto", pager = false): AppBootstrap {
+function createBootstrap(
+  initialMode: LayoutMode = "auto",
+  pager = false,
+  autoSplitMinWidth?: number,
+): AppBootstrap {
   return createTestVcsAppBootstrap({
     agentSummary: "Changeset summary",
     changesetId: "changeset:responsive",
@@ -32,6 +36,7 @@ function createBootstrap(initialMode: LayoutMode = "auto", pager = false): AppBo
     initialMode,
     pager,
     summary: "Patch summary",
+    vcsOptions: autoSplitMinWidth === undefined ? {} : { autoSplitMinWidth },
   });
 }
 
@@ -105,14 +110,16 @@ describe("responsive app", () => {
     expect((full.match(/alpha\.ts/g) ?? []).length).toBe(2);
     expect(full).not.toContain("Changeset summary");
     expect(full).toMatch(/▌.*▌/);
+    expect(full).toMatch(/alpha = 1;.*alpha = 2;/);
 
     expect((medium.match(/alpha\.ts/g) ?? []).length).toBe(2);
     expect(medium).not.toContain("Changeset summary");
-    expect(medium).toMatch(/▌.*▌/);
+    // The visible sidebar leaves fewer than 160 available diff columns.
+    expect(medium).not.toMatch(/alpha = 1;.*alpha = 2;/);
 
     expect((narrow.match(/alpha\.ts/g) ?? []).length).toBe(1);
     expect(narrow).not.toContain("Changeset summary");
-    expect(narrow).toMatch(/▌.*▌/);
+    expect(narrow).not.toMatch(/▌.*▌/);
 
     expect((tight.match(/alpha\.ts/g) ?? []).length).toBe(1);
     expect(tight).not.toContain("Changeset summary");
@@ -219,6 +226,54 @@ describe("responsive app", () => {
     expect(forcedUnified).not.toMatch(/▌.*▌/);
   });
 
+  test("a configured auto split minimum width moves the split cutoff", async () => {
+    const lowered = await captureFrameForBootstrap(createBootstrap("auto", false, 120), 140);
+    const raised = await captureFrameForBootstrap(createBootstrap("auto", false, 300), 240);
+
+    expect(lowered).toMatch(/▌.*▌/);
+    expect(raised).not.toMatch(/▌.*▌/);
+  });
+
+  test("auto layout follows sidebar toggles without changing terminal width", async () => {
+    const setup = await testRender(<AppHost bootstrap={createBootstrap()} />, {
+      width: 180,
+      height: 24,
+    });
+
+    try {
+      await act(async () => {
+        await setup.renderOnce();
+      });
+      expect(setup.captureCharFrame()).not.toMatch(/alpha = 1;.*alpha = 2;/);
+
+      await act(async () => {
+        await setup.mockInput.typeText("s");
+        await setup.renderOnce();
+      });
+      expect(setup.captureCharFrame()).toMatch(/alpha = 1;.*alpha = 2;/);
+
+      await act(async () => {
+        await setup.mockInput.typeText("s");
+        await setup.renderOnce();
+      });
+      expect(setup.captureCharFrame()).not.toMatch(/alpha = 1;.*alpha = 2;/);
+    } finally {
+      await act(async () => {
+        setup.renderer.destroy();
+      });
+    }
+  });
+
+  test("auto layout subtracts outer padding at the exact no-sidebar cutoff", async () => {
+    const bootstrap = createBootstrap();
+    bootstrap.initialSidebar = false;
+    const below = await captureFrameForBootstrap(bootstrap, 163);
+    const at = await captureFrameForBootstrap(bootstrap, 164);
+
+    expect(below).not.toMatch(/alpha = 1;.*alpha = 2;/);
+    expect(at).toMatch(/alpha = 1;.*alpha = 2;/);
+  });
+
   test("pager mode stays responsive while hiding app chrome", async () => {
     const wide = await captureFrameForBootstrap(createBootstrap("auto", true), 220);
     const narrow = await captureFrameForBootstrap(createBootstrap("auto", true), 150);
@@ -232,7 +287,7 @@ describe("responsive app", () => {
     expect(narrow).not.toContain("File  View  Navigate  Agent  Help");
     expect(narrow).not.toContain("F10 menu");
     expect((narrow.match(/alpha\.ts/g) ?? []).length).toBe(1);
-    expect(narrow).toMatch(/▌.*▌/);
+    expect(narrow).not.toMatch(/▌.*▌/);
 
     expect(tight).not.toContain("File  View  Navigate  Agent  Help");
     expect(tight).not.toContain("F10 menu");

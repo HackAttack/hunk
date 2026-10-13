@@ -1,20 +1,12 @@
-import type { LayoutMode } from "../../core/run/commandInputs";
+import { DEFAULT_AUTO_SPLIT_MIN_WIDTH, type LayoutMode } from "../../core/run/commandInputs";
 
 export type ResponsiveViewport = "full" | "medium" | "tight";
 
-/** Keep two diff columns until each side would fall below roughly 60 terminal cells. */
-const AUTO_SPLIT_MIN_WIDTH = 120;
 const SIDEBAR_VIEWPORT_MIN_WIDTH = 160;
 const FULL_VIEWPORT_MIN_WIDTH = 220;
 
-export interface ResponsiveLayout {
-  viewport: ResponsiveViewport;
-  layout: Exclude<LayoutMode, "auto">;
-  showSidebar: boolean;
-}
-
-/** Bucket terminal widths into the viewport classes the app layout cares about. */
-function resolveResponsiveViewport(viewportWidth: number): ResponsiveViewport {
+/** Bucket terminal widths independently of the space remaining for diffs. */
+export function resolveResponsiveViewport(viewportWidth: number): ResponsiveViewport {
   if (viewportWidth >= FULL_VIEWPORT_MIN_WIDTH) {
     return "full";
   }
@@ -26,32 +18,15 @@ function resolveResponsiveViewport(viewportWidth: number): ResponsiveViewport {
   return "tight";
 }
 
-/** Resolve the effective layout after combining the explicit mode with viewport size. */
+/** Choose auto layout from available diff columns after side panes and outer padding. */
 export function resolveResponsiveLayout(
   requestedLayout: LayoutMode,
-  viewportWidth: number,
-): ResponsiveLayout {
-  const viewport = resolveResponsiveViewport(viewportWidth);
-
-  if (requestedLayout === "split") {
-    return {
-      viewport,
-      layout: "split",
-      showSidebar: viewport !== "tight",
-    };
+  diffContentWidth: number,
+  autoSplitMinWidth = DEFAULT_AUTO_SPLIT_MIN_WIDTH,
+): Exclude<LayoutMode, "auto"> {
+  if (requestedLayout !== "auto") {
+    return requestedLayout;
   }
 
-  if (requestedLayout === "unified") {
-    return {
-      viewport,
-      layout: "unified",
-      showSidebar: viewport !== "tight",
-    };
-  }
-
-  return {
-    viewport,
-    layout: viewportWidth >= AUTO_SPLIT_MIN_WIDTH ? "split" : "unified",
-    showSidebar: viewport !== "tight",
-  };
+  return diffContentWidth >= autoSplitMinWidth ? "split" : "unified";
 }

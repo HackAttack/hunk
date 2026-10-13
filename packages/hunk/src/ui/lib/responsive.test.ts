@@ -1,98 +1,33 @@
 import { describe, expect, test } from "bun:test";
-import { resolveResponsiveLayout } from "./responsive";
+import { resolveResponsiveLayout, resolveResponsiveViewport } from "./responsive";
 
-// Policy thresholds: >=220 full, >=160 medium with a sidebar, >=120 split without one.
-const TIGHT_WIDTH = 100;
-const NARROW_SPLIT_WIDTH = 140;
-const MEDIUM_WIDTH = 180;
-const FULL_WIDTH = 240;
-
-describe("resolveResponsiveLayout — auto", () => {
-  test("chooses unified with no sidebar on tight terminals", () => {
-    expect(resolveResponsiveLayout("auto", TIGHT_WIDTH)).toEqual({
-      viewport: "tight",
-      layout: "unified",
-      showSidebar: false,
-    });
+describe("resolveResponsiveLayout", () => {
+  test("switches at exactly 160 available diff columns by default", () => {
+    expect(resolveResponsiveLayout("auto", 159)).toBe("unified");
+    expect(resolveResponsiveLayout("auto", 160)).toBe("split");
+    expect(resolveResponsiveLayout("auto", 240)).toBe("split");
+    expect(resolveResponsiveLayout("auto", 0)).toBe("unified");
   });
 
-  test("keeps split after the sidebar disappears on narrow terminals", () => {
-    expect(resolveResponsiveLayout("auto", NARROW_SPLIT_WIDTH)).toEqual({
-      viewport: "tight",
-      layout: "split",
-      showSidebar: false,
-    });
+  test("configured minimum widths move the inclusive cutoff", () => {
+    expect(resolveResponsiveLayout("auto", 119, 120)).toBe("unified");
+    expect(resolveResponsiveLayout("auto", 120, 120)).toBe("split");
+    expect(resolveResponsiveLayout("auto", 299, 300)).toBe("unified");
+    expect(resolveResponsiveLayout("auto", 300, 300)).toBe("split");
   });
 
-  test("chooses split with a compact-capable sidebar on medium terminals", () => {
-    expect(resolveResponsiveLayout("auto", MEDIUM_WIDTH)).toEqual({
-      viewport: "medium",
-      layout: "split",
-      showSidebar: true,
-    });
-  });
-
-  test("chooses split with a sidebar on full-width terminals", () => {
-    expect(resolveResponsiveLayout("auto", FULL_WIDTH)).toEqual({
-      viewport: "full",
-      layout: "split",
-      showSidebar: true,
-    });
+  test("explicit modes ignore available width and the configured cutoff", () => {
+    expect(resolveResponsiveLayout("split", 0, 300)).toBe("split");
+    expect(resolveResponsiveLayout("unified", 240, 120)).toBe("unified");
   });
 });
 
-describe("resolveResponsiveLayout — explicit overrides", () => {
-  test("keeps split even on a tight terminal while hiding the sidebar", () => {
-    expect(resolveResponsiveLayout("split", TIGHT_WIDTH)).toEqual({
-      viewport: "tight",
-      layout: "split",
-      showSidebar: false,
-    });
-  });
-
-  test("keeps unified even on a full-width terminal and still shows the sidebar there", () => {
-    expect(resolveResponsiveLayout("unified", FULL_WIDTH)).toEqual({
-      viewport: "full",
-      layout: "unified",
-      showSidebar: true,
-    });
-  });
-
-  test("shows the sidebar at medium and full widths for explicit modes", () => {
-    expect(resolveResponsiveLayout("split", MEDIUM_WIDTH).showSidebar).toBe(true);
-    expect(resolveResponsiveLayout("unified", MEDIUM_WIDTH).showSidebar).toBe(true);
-    expect(resolveResponsiveLayout("split", FULL_WIDTH).showSidebar).toBe(true);
-  });
-});
-
-describe("resolveResponsiveLayout — viewport bucket boundaries", () => {
-  test("classifies exactly at the medium and full minimum widths", () => {
-    // Sidebar visibility remains bucketed at 160; full chrome starts at 220.
-    expect(resolveResponsiveLayout("auto", 159).viewport).toBe("tight");
-    expect(resolveResponsiveLayout("auto", 160).viewport).toBe("medium");
-    expect(resolveResponsiveLayout("auto", 219).viewport).toBe("medium");
-    expect(resolveResponsiveLayout("auto", 220).viewport).toBe("full");
-  });
-
-  test("the sidebar cutoff no longer changes the split layout", () => {
-    expect(resolveResponsiveLayout("auto", 159)).toMatchObject({
-      layout: "split",
-      showSidebar: false,
-    });
-    expect(resolveResponsiveLayout("auto", 160)).toMatchObject({
-      layout: "split",
-      showSidebar: true,
-    });
-  });
-
-  test("auto switches from unified to split at its narrower independent cutoff", () => {
-    expect(resolveResponsiveLayout("auto", 119)).toMatchObject({
-      layout: "unified",
-      showSidebar: false,
-    });
-    expect(resolveResponsiveLayout("auto", 120)).toMatchObject({
-      layout: "split",
-      showSidebar: false,
-    });
+describe("resolveResponsiveViewport", () => {
+  test("keeps terminal viewport buckets independent of available diff width", () => {
+    expect(resolveResponsiveViewport(159)).toBe("tight");
+    expect(resolveResponsiveViewport(160)).toBe("medium");
+    expect(resolveResponsiveViewport(219)).toBe("medium");
+    expect(resolveResponsiveViewport(220)).toBe("full");
+    expect(resolveResponsiveLayout("auto", 120)).toBe("unified");
   });
 });
