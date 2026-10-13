@@ -295,6 +295,7 @@ export function DiffPane({
   expandedGapsByFileId = EMPTY_EXPANDED_GAPS_BY_FILE_ID,
   fileViews = EMPTY_FILE_VIEWS,
   files,
+  emptyStateMessage = "No changes to review.",
   visibleHunkIndexesByFileId,
   semanticFileIdentities,
   lineHighlights = EMPTY_LINE_HIGHLIGHTS,
@@ -375,6 +376,8 @@ export function DiffPane({
   /** Validated alternate layouts, keyed by file id; raw Pierre remains the fallback. */
   fileViews?: ReadonlyMap<string, ResolvedFileViewLayout>;
   files: DiffFile[];
+  /** Distinguish empty input from files hidden by the host's review projection. */
+  emptyStateMessage?: string;
   /** Optional extension-owned hunk projection keyed by runtime file id. */
   visibleHunkIndexesByFileId?: ReadonlyMap<string, ReadonlySet<number>> | null;
   /** Already-projected semantic identities for selection invalidation. */
@@ -2688,7 +2691,7 @@ export function DiffPane({
         </box>
       ) : (
         <box style={{ flexGrow: 1, alignItems: "center", justifyContent: "center" }}>
-          <text fg={theme.muted}>No files match the current filter.</text>
+          <text fg={theme.muted}>{emptyStateMessage}</text>
         </box>
       )}
     </box>

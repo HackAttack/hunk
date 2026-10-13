@@ -1731,6 +1731,11 @@ export function App({
             expandedGapsByFileId={review.expandedGapsByFileId}
             fileViews={fileViewLayouts}
             files={filteredFiles}
+            emptyStateMessage={
+              reviewFiles.length === 0
+                ? "No changes to review."
+                : "No files match the current filter."
+            }
             visibleHunkIndexesByFileId={review.visibleHunkIndexesByFileId}
             semanticFileIdentities={semanticFileIdentities}
             lineHighlights={paintedLineHighlights}

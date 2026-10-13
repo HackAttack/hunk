@@ -33,9 +33,10 @@ async function createTestRoot() {
   return root;
 }
 
+// The bounded-enumeration fixture creates 10,001 directories; Windows cleanup needs its own budget.
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
+}, 30_000);
 
 describe("filesystem documents", () => {
   test("lists only immediate children, directories first, and reads complete unchanged text", async () => {

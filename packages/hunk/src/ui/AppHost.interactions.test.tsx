@@ -2714,6 +2714,25 @@ describe("App interactions", () => {
     }
   });
 
+  test("an empty loaded review does not claim that a filter hid its files", async () => {
+    const bootstrap = createBootstrap();
+    bootstrap.changeset = { ...bootstrap.changeset, files: [] };
+    const setup = await testRender(<AppHost bootstrap={bootstrap} />, {
+      width: 120,
+      height: 24,
+    });
+
+    try {
+      await flush(setup);
+      expect(setup.captureCharFrame()).toContain("No changes to review.");
+      expect(setup.captureCharFrame()).not.toContain("current filter");
+    } finally {
+      await act(async () => {
+        setup.renderer.destroy();
+      });
+    }
+  });
+
   test("filter focus accepts typed input and narrows the visible file set", async () => {
     const setup = await testRender(<AppHost bootstrap={createBootstrap()} />, {
       width: 240,

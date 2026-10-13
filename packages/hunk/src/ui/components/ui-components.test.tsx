@@ -3905,34 +3905,41 @@ describe("UI components", () => {
     expect(frame).not.toMatch(/q\s+quit/);
   });
 
-  test("DiffPane renders an empty-state message when no files are visible", async () => {
-    const theme = resolveTheme("github-dark-default", null);
-    const frame = await captureFrame(
-      <DiffPane
-        diffContentWidth={72}
-        files={[]}
-        headerLabelWidth={40}
-        headerStatsWidth={16}
-        layout="split"
-        scrollRef={createRef()}
-        selectedFileId={undefined}
-        selectedHunkIndex={0}
-        separatorWidth={68}
-        showAgentNotes={false}
-        showLineNumbers={true}
-        showHunkHeaders={true}
-        wrapLines={false}
-        wrapToggleScrollTop={null}
-        theme={theme}
-        width={76}
-        onSelectFile={() => {}}
-      />,
-      80,
-      10,
-    );
+  test.each([
+    [undefined, "No changes to review."],
+    ["No files match the current filter.", "No files match the current filter."],
+  ])(
+    "DiffPane distinguishes empty reviews from filtered reviews (%s)",
+    async (message, expected) => {
+      const theme = resolveTheme("github-dark-default", null);
+      const frame = await captureFrame(
+        <DiffPane
+          diffContentWidth={72}
+          files={[]}
+          emptyStateMessage={message}
+          headerLabelWidth={40}
+          headerStatsWidth={16}
+          layout="split"
+          scrollRef={createRef()}
+          selectedFileId={undefined}
+          selectedHunkIndex={0}
+          separatorWidth={68}
+          showAgentNotes={false}
+          showLineNumbers={true}
+          showHunkHeaders={true}
+          wrapLines={false}
+          wrapToggleScrollTop={null}
+          theme={theme}
+          width={76}
+          onSelectFile={() => {}}
+        />,
+        80,
+        10,
+      );
 
-    expect(frame).toContain("No files match the current filter.");
-  });
+      expect(frame).toContain(expected);
+    },
+  );
 
   test("DiffPane can hide line numbers while keeping diff signs visible", async () => {
     const bootstrap = createBootstrap();
