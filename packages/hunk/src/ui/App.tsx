@@ -1353,6 +1353,10 @@ export function App({
         canDeleteActiveNote: activeRemovableNote !== undefined && review.draftNote === null,
         canEditActiveNote: activeEditableNoteId !== undefined && review.draftNote === null,
         canReplyToActiveNote: activeReplyableNoteId !== undefined && review.draftNote === null,
+        get canSaveDraftNote() {
+          // Same-chunk saves can arrive before React commits the new draft.
+          return review.draftNote !== null || isDraftFocusPending();
+        },
         canRefreshCurrentInput,
         alignCurrentLine,
         applyFilePresentationToAllMatching,
@@ -1389,6 +1393,7 @@ export function App({
         startUserNote: () => {
           if (!selectionActionsRef.current?.comment()) startUserNote();
         },
+        saveDraftNote: () => saveDraftNote(renderer.currentFocusedEditor?.plainText),
         toggleAgentNotes,
         toggleCopyDecorations,
         toggleFocusArea,
@@ -1424,6 +1429,7 @@ export function App({
     () => ({ delete: deleteNoteKeyLabel, edit: editNoteKeyLabel, reply: replyNoteKeyLabel }),
     [deleteNoteKeyLabel, editNoteKeyLabel, replyNoteKeyLabel],
   );
+  const draftSaveKeyLabel = findAppCommandById(appCommands, "hunk.review.saveNote")?.keyLabels[0];
   useExtensionRuntimeBindings({
     commands: appCommands,
     navigation: extensionNavigationBindings,
@@ -1516,7 +1522,6 @@ export function App({
     discardViewPreferencesAndQuit,
     neverAskToSaveViewPreferencesAndQuit,
     closeSaveConfigPrompt,
-    saveDraftNote,
     showAgentSkill,
     showHelp,
     switchMenu,
@@ -1770,6 +1775,7 @@ export function App({
             onRemoveLiveNote={review.removeLiveComment}
             onRemoveUserNote={review.removeUserNote}
             onSaveDraftNote={saveDraftNote}
+            draftSaveKeyLabel={draftSaveKeyLabel}
             onStartUserNoteAtHunk={startUserNote}
             onUpdateDraftNote={updateDraftNote}
             onBlurDraftNote={blurDraftNote}
