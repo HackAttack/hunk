@@ -10,10 +10,19 @@ import {
 
 class FakeThemeInput extends EventEmitter {
   isRaw = false;
+  readableFlowing: boolean | null = null;
+
   setRawMode(mode: boolean) {
     this.isRaw = mode;
   }
-  resume() {}
+
+  resume() {
+    this.readableFlowing = true;
+  }
+
+  pause() {
+    this.readableFlowing = false;
+  }
 }
 
 /** Unit coverage for the terminal background probe used by auto theme POC. */
@@ -78,6 +87,24 @@ describe("terminal theme detection", () => {
     expect(query).toStartWith("\x1b]10;?\x1b\\\x1b]11;?\x1b\\\x1b]4;0;?\x1b\\");
     expect(query).toEndWith("\x1b]4;15;?\x1b\\\x1b[c");
     expect(input.isRaw).toBe(false);
+  });
+
+  test.each([null, false, true])("restores input flow after a probe (%s)", async (flowing) => {
+    const input = new FakeThemeInput();
+    input.readableFlowing = flowing;
+    const output = { write: () => queueMicrotask(() => input.emit("data", "\x1b[?1;2c")) };
+
+    await detectTerminalColors({ input, output, timeoutMs: 5_000 });
+    expect(input.readableFlowing).toBe(flowing === true);
+    expect(input.listenerCount("data")).toBe(0);
+  });
+
+  test("pauses previously idle input when terminal probing times out", async () => {
+    const input = new FakeThemeInput();
+    await detectTerminalColors({ input, output: { write: () => {} }, timeoutMs: 1 });
+    expect(input.readableFlowing).toBe(false);
+    expect(input.isRaw).toBe(false);
+    expect(input.listenerCount("data")).toBe(0);
   });
 
   test("returns null when the terminal answers no color queries", async () => {

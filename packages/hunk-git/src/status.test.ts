@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import {
   mkdtempSync,
   mkdirSync,
@@ -12,6 +12,9 @@ import { tmpdir } from "node:os";
 import { resolveCanonicalPath } from "@hunk/vcs/path";
 import { join } from "node:path";
 import { createGitStatusCapability, parseGitStatus, parseGitStatusWorktrees } from "./status";
+
+// Real Git fixture setup and multi-step status reads can exceed five seconds on Windows runners.
+setDefaultTimeout(30_000);
 
 const dirs: string[] = [];
 /** Create a portable Git fixture with local identity and a deterministic branch. */

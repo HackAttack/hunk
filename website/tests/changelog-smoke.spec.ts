@@ -1,4 +1,12 @@
 import { expect, test } from "@playwright/test";
+import { readFileSync } from "node:fs";
+
+// Release channels change independently of this test; verify the browser preserves published labels.
+const changelogIndex = readFileSync(
+  new URL("../src/content/docs/changelog/index.md", import.meta.url),
+  "utf8",
+);
+const prereleaseSeriesCount = changelogIndex.match(/^Prerelease ·/gm)?.length ?? 0;
 
 test("the changelog is reachable from the main navigation", async ({ page }, testInfo) => {
   await page.goto("/");
@@ -110,7 +118,7 @@ test("the index lists every series newest first and links each one", async ({ pa
     expect(major > nextMajor || (major === nextMajor && minor > nextMinor)).toBe(true);
   }
 
-  await expect(page.getByText(/^Prerelease ·/)).toHaveCount(0);
+  await expect(page.getByText(/^Prerelease ·/)).toHaveCount(prereleaseSeriesCount);
   await expect(page.getByText(/^Latest ·/)).toHaveCount(1);
 });
 

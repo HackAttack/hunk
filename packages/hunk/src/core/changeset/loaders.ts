@@ -15,6 +15,7 @@ import { buildDiffFile, type BuildDiffFileOptions, type DiffFileSourceContext } 
 import { createFileSourceFetcher, type FileSourceSpec } from "./fileSource";
 import { changesetFromPatch } from "./fromPatch";
 
+import { HunkUserError } from "../run/errors";
 import { DEFAULT_FILE_GAP, DEFAULT_HUNK_GAP } from "../run/reviewGap";
 import { DEFAULT_SCROLL_OFF } from "../run/scrollOff";
 import { DEFAULT_TAB_WIDTH } from "../run/tabWidth";
@@ -274,7 +275,22 @@ async function loadPatchChangeset(
       : await Bun.file(resolvePath(cwd, input.file)).text());
 
   const label = input.file && input.file !== "-" ? input.file : "stdin patch";
-  return changesetFromPatch(patchText, `Patch review: ${basename(label)}`, label, sidecar);
+  const changeset = changesetFromPatch(
+    patchText,
+    `Patch review: ${basename(label)}`,
+    label,
+    sidecar,
+  );
+
+  // Explicit patch input must not disguise an upstream error as a successful empty review.
+  // Empty input remains valid; binary and metadata-only patches have recognized files too.
+  if (patchText.trim() && changeset.files.length === 0) {
+    throw new HunkUserError(`No recognizable file changes in patch input (${label}).`, [
+      "Provide a unified diff, or check the command producing the patch.",
+    ]);
+  }
+
+  return changeset;
 }
 
 /** Resolve CLI input into the fully loaded app bootstrap state. */

@@ -19,6 +19,7 @@ interface ThemeProbeInput {
   pause?(): unknown;
   setRawMode?(mode: boolean): unknown;
   isRaw?: boolean;
+  readableFlowing?: boolean | null;
 }
 
 interface ThemeProbeOutput {
@@ -156,6 +157,7 @@ export async function detectTerminalColors({
   timeoutMs = 150,
 }: DetectTerminalThemeOptions): Promise<TerminalColors | null> {
   const wasRaw = input.isRaw;
+  const wasFlowing = input.readableFlowing === true;
   let settled = false;
   let buffer = "";
 
@@ -167,6 +169,8 @@ export async function detectTerminalColors({
       settled = true;
       clearTimeout(timer);
       input.removeListener("data", onData);
+      // A startup failure may never hand input to a renderer; do not leave stdin keeping it alive.
+      if (!wasFlowing) input.pause?.();
       if (wasRaw !== undefined) {
         input.setRawMode?.(wasRaw);
       }
