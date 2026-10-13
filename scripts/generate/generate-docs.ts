@@ -254,26 +254,102 @@ ${sessionSections.join("\n\n")}
 `);
 }
 
+/** Group reference keys without changing runtime defaults or parsing order. */
+export const CONFIG_REFERENCE_GROUPS = {
+  "Layout and display": [
+    "mode",
+    "theme",
+    "line_numbers",
+    "tab_width",
+    "file_gap",
+    "hunk_gap",
+    "wrap_lines",
+    "hunk_headers",
+    "menu_bar",
+    "animations",
+    "sidebar",
+    "transparent_background",
+    "color_moved",
+  ],
+  "Navigation and scrolling": ["cursor_line", "scroll_off", "wheel_scroll_lines"],
+  "Review inputs and reloading": ["vcs", "watch", "exclude_untracked"],
+  "Notes and copying": ["agent_notes", "copy_decorations"],
+  "Saving preferences": ["prompt_save_view_preferences"],
+} as const;
+
+/** Describe the visible theme slots accepted by custom-theme configuration. */
+export const CONFIG_THEME_COLOR_DESCRIPTIONS = {
+  background: "Main application background.",
+  panel: "Pane and menu backgrounds.",
+  panelAlt: "Alternate backgrounds, including diff metadata and the status line.",
+  border: "Pane separators and borders.",
+  accent: "Active controls and highlighted UI elements.",
+  accentMuted: "Tinted backgrounds for selected controls and tree entries.",
+  text: "Default foreground text.",
+  muted: "Secondary labels and metadata text.",
+  addedBg: "Added-line background.",
+  removedBg: "Removed-line background.",
+  movedAddedBg: "Background for the added side of moved lines.",
+  movedRemovedBg: "Background for the removed side of moved lines.",
+  contextBg: "Unchanged-line background.",
+  addedContentBg: "Emphasized changed text within added lines.",
+  removedContentBg: "Emphasized changed text within removed lines.",
+  contextContentBg: "Content background within unchanged lines.",
+  addedSignColor: "Addition markers in the diff gutter.",
+  removedSignColor: "Deletion markers in the diff gutter.",
+  lineNumberBg: "Line-number column background.",
+  lineNumberFg: "Line-number text.",
+  selectedHunk: "Selected-hunk highlighting.",
+  badgeAdded: "Addition-count badges.",
+  badgeRemoved: "Deletion-count badges.",
+  badgeNeutral: "Neutral badges and file-header labels.",
+  fileNew: "New-file status indicators.",
+  fileDeleted: "Deleted-file status indicators.",
+  fileRenamed: "Renamed-file status indicators.",
+  fileModified: "Modified-file status indicators.",
+  fileUntracked: "Untracked-file status indicators.",
+  noteBorder: "Note-card borders and inline note guides.",
+  noteBackground: "Note-card body background.",
+  noteTitleBackground: "Note-card title background.",
+  noteTitleText: "Note-card title text.",
+} satisfies Record<(typeof CONFIG_REFERENCE_CUSTOM_THEME.colorKeys)[number], string>;
+
 /** Render the deterministic exhaustive config reference. */
 export function renderConfigReference() {
-  const optionBlocks = CONFIG_REFERENCE_OPTIONS.map((option) => {
-    const aliasDetails = option.aliases?.length
-      ? `\n- **Aliases:** ${option.aliases
-          .map(({ key, deprecated }) => `\`${key}\`${deprecated ? " (deprecated)" : ""}`)
-          .join(", ")}`
-      : "";
-    const defaultValue =
-      option.runtimeDefault !== undefined
-        ? `\`${String(option.runtimeDefault)}\``
-        : (option.defaultValue ?? "—");
-    const scopeDetails = option.userOnly ? "\n- **Scope:** user config only" : "";
-    return `**\`${option.key}\`**\n\n${option.description}\n\n- **Type:** ${option.type}\n- **Accepted:** ${option.accepted}\n- **Built-in default:** ${defaultValue}${scopeDetails}${aliasDetails}`;
-  });
+  const optionBlocks = new Map(
+    CONFIG_REFERENCE_OPTIONS.map((option) => {
+      const aliasDetails = option.aliases?.length
+        ? `\n- **Aliases:** ${option.aliases
+            .map(({ key, deprecated }) => `\`${key}\`${deprecated ? " (deprecated)" : ""}`)
+            .join(", ")}`
+        : "";
+      const defaultValue =
+        option.runtimeDefault !== undefined
+          ? `\`${String(option.runtimeDefault)}\``
+          : (option.defaultValue ?? "not set; the input provider decides");
+      const scopeDetails = option.userOnly ? "\n- **Scope:** user config only" : "";
+      return [
+        option.key,
+        `#### \`${option.key}\`\n\n${option.description}\n\n- **Type:** ${option.type}\n- **Accepted:** ${option.accepted}\n- **Built-in default:** ${defaultValue}${scopeDetails}${aliasDetails}`,
+      ] as const;
+    }),
+  );
+  const groupedKeys = Object.values(CONFIG_REFERENCE_GROUPS).flat();
+  if (
+    new Set(groupedKeys).size !== groupedKeys.length ||
+    groupedKeys.length !== optionBlocks.size ||
+    groupedKeys.some((key) => !optionBlocks.has(key))
+  ) {
+    throw new Error("Config reference groups must include every preference key exactly once.");
+  }
+  const preferenceSections = Object.entries(CONFIG_REFERENCE_GROUPS).map(
+    ([title, keys]) => `### ${title}\n\n${keys.map((key) => optionBlocks.get(key)).join("\n\n")}`,
+  );
   const sectionRows = Object.entries(CONFIG_COMMAND_SECTIONS).map(
     ([section, description]) => `| \`[${section}]\` | ${description} |`,
   );
   const colorRows = CONFIG_REFERENCE_CUSTOM_THEME.colorKeys.map(
-    (key) => `| \`custom_theme.${key}\` | Override the ${key} semantic color. |`,
+    (key) => `| \`custom_theme.${key}\` | ${CONFIG_THEME_COLOR_DESCRIPTIONS[key]} |`,
   );
   const legacyRows = CONFIG_REFERENCE_CUSTOM_THEME.legacySyntaxColorKeys.map(
     (key) => `\`custom_theme.syntax.${key}\``,
@@ -293,7 +369,81 @@ description: Exhaustive generated reference for Hunk TOML keys, defaults, aliase
 
 ${GENERATED_NOTICE}
 
-Hunk reads TOML preferences from the user config and an optional repository config. This reference is generated from the same catalog that \`packages/hunk/src/core/run/config.ts\` uses to parse preference keys.
+Configure Hunk with TOML settings in your user config or a project's \`.hunk/config.toml\`. Include only the settings you want to change.
+
+For a walkthrough, start with the [configuration guide](/docs/configure/configuration/). This page lists every supported preference, table, and default.
+
+## Config file locations
+
+| File | Location | Use for |
+| --- | --- | --- |
+| User (XDG override) | \`$XDG_CONFIG_HOME/hunk/config.toml\` | Personal preferences |
+| User (fallback) | \`$HOME/.config/hunk/config.toml\`, or \`%USERPROFILE%/.config/hunk/config.toml\` when HOME is unavailable | Personal preferences |
+| Repository/project | \`.hunk/config.toml\` at the project root | Project-specific settings |
+
+Hunk searches upward from the working directory for the nearest directory containing \`.hunk\` or recognized by a loaded VCS backend as a repository root. That directory supplies the project config. No user config is loaded if none of the user-path environment variables is set.
+
+Create your user config with a few settings:
+
+\`\`\`toml
+theme = "terminal"
+mode = "auto"
+line_numbers = true
+wrap_lines = false
+\`\`\`
+
+Omitted settings use the built-in defaults below. Shared settings belong **above all table headers**: in TOML, keys after \`[show]\` belong to that table until another table begins.
+
+## Command tables
+
+### Override settings for a command
+
+Add a command table to the same config file and repeat the settings you want to override. Other settings are inherited. This changes command preferences, not command implementations or keyboard shortcuts.
+
+\`\`\`toml
+mode = "auto"
+
+[vcs]
+mode = "split"
+watch = true
+
+[show]
+mode = "unified"
+
+[diff]
+wrap_lines = true
+\`\`\`
+
+With this config and no repository overrides:
+
+| Invocation | Result |
+| --- | --- |
+| \`hunk diff\` | Split layout, watch enabled |
+| \`hunk show\` | Unified layout |
+| \`hunk diff --files before.ts after.ts\` | Automatic layout, wrapping enabled |
+| \`hunk show --mode split\` | Split layout; the explicit flag wins |
+
+**Repository \`hunk diff\` uses \`[vcs]\`. \`[diff]\` only applies to two-file comparisons.** Table names are fixed; do not infer additional tables from CLI command names.
+
+${sectionRows.length > 0 ? ["| Table | Applies to |", "| --- | --- |", ...sectionRows].join("\n") : "No command tables are supported."}
+
+### Pager settings
+
+\`[pager]\` applies when a diff opens as a pager session, such as Git output displayed by \`hunk pager\`. It overrides the matching command table **within the same file**, not in ordinary interactive reviews.
+
+\`\`\`toml
+[pager]
+menu_bar = false
+wrap_lines = true
+\`\`\`
+
+Try it for one Git invocation:
+
+\`\`\`bash
+git -c core.pager="hunk pager" diff
+\`\`\`
+
+Pager reviews start with the files pane closed, even if \`sidebar = true\`. Non-diff input goes to a plain-text pager instead; these view preferences do not configure that fallback. See [Git pager and difftool](/docs/workflows/git-pager-and-difftool/) for permanent setup.
 
 ## Resolution and scope
 
@@ -304,33 +454,77 @@ Layers apply from lowest to highest precedence:
 3. repository \`.hunk/config.toml\` top-level keys, matching command table, and pager table
 4. explicit CLI options
 
-The user path is \`$XDG_CONFIG_HOME/hunk/config.toml\` when configured. Otherwise Hunk uses \`$HOME/.config/hunk/config.toml\` or \`%USERPROFILE%/.config/hunk/config.toml\`; if none of those environment variables are set, no user config is loaded. Custom theme tables are root-only; preference keys may appear at top level, in a command table, or in \`[pager]\`.
+A repository's top-level setting can override a user command-specific setting. For example:
+
+\`\`\`toml
+# User config
+[show]
+mode = "unified"
+\`\`\`
+
+\`\`\`toml
+# Repository .hunk/config.toml
+mode = "split"
+\`\`\`
+
+\`hunk show\` uses split; \`hunk show --mode unified\` uses unified. Flags such as \`--no-wrap\` also override a configured \`wrap_lines = true\`. See the [CLI reference](/docs/reference/cli/) for available flags.
+
+Preference keys may appear at top level, in a command table, or in \`[pager]\`, except that user-only preferences are ignored in repository config. Theme definitions, extension tables, and keybindings belong at the root, never nested in command tables.
 
 Persistent application state uses an absolute \`$XDG_STATE_HOME/hunk/state.json\`, falling back to \`~/.local/state/hunk/state.json\` (or the platform home equivalent). On first use, Hunk copies legacy state from the config directory only when the new file is absent, retains the original, and continues using it if migration fails. Existing new state always takes precedence. Global extensions remain in \`$XDG_CONFIG_HOME/hunk/extensions/\` or \`~/.config/hunk/extensions/\`.
 
 ## Preference keys
 
-${optionBlocks.join("\n\n---\n\n")}
+${preferenceSections.join("\n\n")}
 
-## Command tables
+## Keyboard shortcuts
 
-${sectionRows.length > 0 ? ["| Table | Applies to |", "| --- | --- |", ...sectionRows].join("\n") : "No command tables are supported."}
+To change the keys that trigger actions, use \`[keybindings]\` in your **user config**:
 
-\`[pager]\` is an additional overlay for any review opened with pager-style chrome. It is applied after the matching command table in the same file.
+\`\`\`toml
+[keybindings]
+"hunk.review.nextHunk" = ["]", "ctrl+n"]
+"hunk.app.quit" = "ctrl+x"
+\`\`\`
+
+Your bindings replace that command's default keys. Repository config cannot remap keys. See [Keybindings](/docs/configure/keybindings/) for command ids, unbinding, conflicts, and chord syntax.
 
 ## Custom themes
 
-Set \`theme = "custom"\` and add a root \`[custom_theme]\` table. \`custom_theme.base\` accepts one of these built-in ids and defaults to \`${CONFIG_REFERENCE_CUSTOM_THEME.defaultBase}\` when layered custom themes need a base:
+Choose a built-in theme with \`theme = "catppuccin-mocha"\`. \`terminal\` follows your terminal palette; \`auto\` selects a light or dark GitHub theme from the terminal background. See the [theme guide](/docs/configure/themes/) for selection and previews.
 
-${BUILT_IN_THEME_IDS.map((id) => `- \`${id}\``).join("\n")}
+To customize colors:
 
-These deprecated IDs remain accepted by \`theme\` and \`custom_theme.base\`, then normalized to their replacements:
+\`\`\`toml
+theme = "custom"
 
-| Legacy ID | Replacement |
-| --- | --- |
-${legacyThemeRows.join("\n")}
+[custom_theme]
+base = "catppuccin-mocha"
+accent = "#7fd1ff"
+\`\`\`
 
-\`custom_theme.label\` accepts a non-empty string. Every semantic color below accepts a six-digit \`#rrggbb\` value:
+The theme inherits its base and overrides only the colors you supply.
+
+### Named themes
+
+Use root \`[themes.<id>]\` tables to keep several custom themes:
+
+\`\`\`toml
+theme = "midnight-ink"
+
+[themes.midnight-ink]
+base = "catppuccin-mocha"
+accent = "#7fd1ff"
+
+[themes.paper-trail]
+base = "github-light-default"
+\`\`\`
+
+Each accepts the same keys as \`[custom_theme]\`. Select one with \`theme = "<id>"\` or \`--theme <id>\`; \`[custom_theme]\` itself has the id \`custom\`. Ids use lowercase letters or digits separated by \`-\` or \`_\`. Reserved ids (built-in themes, \`auto\`, and \`custom\`) are skipped with a startup notice. Same-id theme tables merge field by field across user and repository config, with repository values winning.
+
+### Semantic colors
+
+\`custom_theme.label\` accepts a non-empty display name. Every semantic color below accepts a six-digit \`#rrggbb\` value:
 
 | Key | Description |
 | --- | --- |
@@ -338,17 +532,42 @@ ${colorRows.join("\n")}
 
 ### Syntax scopes
 
-\`[${CONFIG_REFERENCE_CUSTOM_THEME.syntaxScopesTable}]\` accepts arbitrary non-empty Shiki/TextMate scope names as TOML keys and six-digit hex colors as values. These exact scope overrides are the preferred syntax customization API.
+\`[${CONFIG_REFERENCE_CUSTOM_THEME.syntaxScopesTable}]\` accepts non-empty Shiki/TextMate scope names and six-digit hex colors. Add overrides to your custom theme; quote keys containing dots:
+
+\`\`\`toml
+[custom_theme.syntax_scopes]
+"comment" = "#6e85a7"
+"punctuation.definition.comment" = "#6e85a7"
+\`\`\`
+
+These are syntax token colors, distinct from the UI and diff backgrounds above. See the [theme guide](/docs/configure/themes/#create-a-custom-theme) for scope matching behavior.
 
 The deprecated \`[${CONFIG_REFERENCE_CUSTOM_THEME.legacySyntaxTable}]\` table remains accepted for one compatibility window with these semantic keys: ${legacyRows.join(", ")}. Hunk normalizes them into exact scope overrides and emits a startup notice.
 
-### Named themes
+### Built-in theme ids
 
-Declare any number of additional themes as \`[${CONFIG_REFERENCE_CUSTOM_THEME.namedThemeTable}.<id>]\` tables. Each one accepts exactly the keys \`[${CONFIG_REFERENCE_CUSTOM_THEME.table}]\` accepts, plus the id in the table name, and is selectable with \`theme = "<id>"\` or \`--theme <id>\`. Ids are lowercase words separated by \`-\` or \`_\`; ids belonging to built-in themes, to \`auto\`, or to the \`${CONFIG_REFERENCE_CUSTOM_THEME.table}\` table are skipped with a startup notice. \`[${CONFIG_REFERENCE_CUSTOM_THEME.table}]\` itself keeps the id \`custom\`. Same-id tables merge field by field across the user and repository layers, with the repository layer winning.
+\`custom_theme.base\` accepts these ids and defaults to \`${CONFIG_REFERENCE_CUSTOM_THEME.defaultBase}\`. \`theme\` also accepts these ids, plus \`terminal\` and \`auto\`:
+
+${BUILT_IN_THEME_IDS.map((id) => `- \`${id}\``).join("\n")}
+
+### Deprecated theme ids
+
+These aliases remain accepted by \`theme\` and \`custom_theme.base\`, then normalized to their replacements:
+
+| Legacy ID | Replacement |
+| --- | --- |
+${legacyThemeRows.join("\n")}
 
 ## Extensions
 
-\`[${CONFIG_REFERENCE_EXTENSIONS.table}]\` controls which user extensions load. It is root-only and does not accept command or \`[pager]\` overrides.
+\`[${CONFIG_REFERENCE_EXTENSIONS.table}]\` controls extension loading. It is root-only and does not accept command or \`[pager]\` overrides. For example, disable the bundled GitHub integration:
+
+\`\`\`toml
+[extensions]
+disabled = ["hunk.gh"]
+\`\`\`
+
+\`enabled = false\` and \`--no-extensions\` turn off user extensions; bundled VCS backends still load. Selectable bundled extensions such as \`hunk.gh\` can be disabled by id.
 
 | Key | Type | Accepted | Built-in default | Description |
 | --- | --- | --- | --- | --- |
@@ -356,7 +575,24 @@ ${extensionRows.join("\n")}
 
 Repository \`.hunk/config.toml\` paths are kept separate from user paths: Hunk prompts for trust before executing repository-declared extension code, and \`--no-extensions\` disables user extensions entirely for one run.
 
-Each extension reads its own settings from a \`[${CONFIG_REFERENCE_EXTENSIONS.perExtensionTable}.<id>]\` table. Hunk does not interpret those keys; it passes the table through to the extension. Repository tables merge over user tables key by key, and Hunk emits a startup notice naming every extension whose settings the repository overrides.
+Each extension reads its own settings from a root \`[${CONFIG_REFERENCE_EXTENSIONS.perExtensionTable}.<id>]\` table. For example, after installing the [collapse-generated example extension](/docs/extend/extensions/#a-complete-example):
+
+\`\`\`toml
+[extension.collapse-generated]
+patterns = ["*.lock", "generated/*"]
+\`\`\`
+
+These keys belong to that extension, not Hunk's preference catalog. Repository tables merge over user tables key by key, and Hunk reports which extension settings the repository overrides. See [Extensions](/docs/extend/extensions/) for installation, trust, loading controls, and examples.
+
+## Troubleshooting
+
+| Problem | Check |
+| --- | --- |
+| \`[diff]\` does not affect \`hunk diff\` | Use \`[vcs]\` for repository reviews. |
+| A preference seems ignored | Check repository config, then explicit CLI flags. Later layers win. |
+| A shared setting affects only one command | Move it above all table headers. |
+| A shortcut remap has no effect | Put \`[keybindings]\` in user config; check command ids and reported conflicts. |
+| Custom colors have no effect | Select the custom theme by id and keep its definition at the root. |
 `);
 }
 

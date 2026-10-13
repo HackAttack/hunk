@@ -2,7 +2,11 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { CONFIG_REFERENCE_OPTIONS } from "../../packages/hunk/src/core/run/config";
+import {
+  CONFIG_COMMAND_SECTIONS,
+  CONFIG_REFERENCE_CUSTOM_THEME,
+  CONFIG_REFERENCE_OPTIONS,
+} from "../../packages/hunk/src/core/run/config";
 import { renderHunkReviewSkill } from "../../packages/hunk/src/hunk-review/skillDocument";
 import { SESSION_AGENT_COMMAND_LIST } from "../../packages/hunk/src/session/agent/surface";
 import {
@@ -14,6 +18,8 @@ import {
 } from "../../packages/hunk/src/session/broker/brokerConfig";
 import { LEGACY_THEME_ID_ALIASES } from "../../packages/hunk/src/core/theme/catalog";
 import {
+  CONFIG_REFERENCE_GROUPS,
+  CONFIG_THEME_COLOR_DESCRIPTIONS,
   generateDocsArtifacts,
   GENERATED_DOC_PATHS,
   renderCliReference,
@@ -78,6 +84,33 @@ describe("generated website references", () => {
         new RegExp(`\\| \\x60${alias}\\x60\\s+\\| \\x60${replacement}\\x60\\s+\\|`),
       );
     }
+  });
+
+  test("groups every preference exactly once and gives every theme color a description", () => {
+    const keys: string[] = Object.values(CONFIG_REFERENCE_GROUPS).flat();
+    expect([...keys].sort()).toEqual(CONFIG_REFERENCE_OPTIONS.map(({ key }) => key).sort());
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(Object.keys(CONFIG_THEME_COLOR_DESCRIPTIONS).sort()).toEqual(
+      [...CONFIG_REFERENCE_CUSTOM_THEME.colorKeys].sort(),
+    );
+
+    const reference = renderConfigReference();
+    for (const key of keys) {
+      expect(reference.split(`#### \`${key}\``)).toHaveLength(2);
+    }
+    for (const section of Object.keys(CONFIG_COMMAND_SECTIONS)) {
+      expect(reference).toContain(`\`[${section}]\``);
+    }
+    expect(reference.indexOf("## Command tables")).toBeLessThan(
+      reference.indexOf("## Preference keys"),
+    );
+    expect(reference.indexOf("### Named themes")).toBeLessThan(
+      reference.indexOf("### Built-in theme ids"),
+    );
+    expect(reference).toContain("/docs/configure/configuration/");
+    expect(reference).toContain("/docs/configure/keybindings/");
+    expect(reference).not.toContain("Override the panelAlt semantic color");
+    expect(reference).not.toContain("**Built-in default:** —");
   });
 
   test("publishes the agent skill directly from its authoritative renderer", () => {

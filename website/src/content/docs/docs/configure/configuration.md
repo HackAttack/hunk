@@ -1,66 +1,133 @@
 ---
 title: Configuration
-description: Layer user and repository TOML settings, then override them per command or from the CLI.
+description: Set personal preferences, override them for a command or project, and save interactive changes.
 ---
 
-Hunk reads TOML preferences from a user file and an optional repository file:
+Configure Hunk with TOML. Include only the settings you want to change; Hunk supplies the rest.
 
-- `~/.config/hunk/config.toml` (or the platform/XDG config location)
-- `.hunk/config.toml` at the repository root
+## Create your config
 
-Repository settings override user settings. Command sections then override their layer's top-level values, pager sections apply to pager-style sessions, and explicit CLI flags win last.
+Use your user config for personal preferences:
 
-## Start with useful defaults
+- `$XDG_CONFIG_HOME/hunk/config.toml` if `XDG_CONFIG_HOME` is set.
+- Otherwise, `$HOME/.config/hunk/config.toml` (or `%USERPROFILE%/.config/hunk/config.toml` when `HOME` is unavailable).
+
+Create the parent directory and file if they don't exist. Start with:
 
 ```toml
 theme = "terminal"
 mode = "auto"
-vcs = "git"
-watch = false
-exclude_untracked = false
 line_numbers = true
-tab_width = 4
-file_gap = 1
-hunk_gap = 0
 wrap_lines = false
-hunk_headers = true
-menu_bar = true
-animations = true
-sidebar = "auto"
-agent_notes = false
-transparent_background = false
 ```
 
-Use only the keys you want to change; built-in defaults fill the rest.
+`mode = "auto"` uses split layout on wide terminals and unified layout on narrow ones.
 
-## Scope a command
+For project-specific settings, use `.hunk/config.toml` at the project root. Hunk searches upward from the working directory for the nearest `.hunk` directory or recognized repository root.
+
+See the [config reference](/docs/reference/config/) for every setting and default, or the [theme guide](/docs/configure/themes/) for colors.
+
+## Override settings for a command
+
+Add a command table to the same file. Its settings override that file's shared settings for the matching command; settings you omit are inherited.
 
 ```toml
+# Shared settings go before any table headers
 mode = "auto"
 
+# Repository diffs
 [vcs]
+mode = "split"
 watch = true
 
+# Commit reviews
+[show]
+mode = "unified"
+
+# Two-file comparisons
+[diff]
+wrap_lines = true
+```
+
+With this config and no repository overrides:
+
+| Run                                    | Result                             |
+| -------------------------------------- | ---------------------------------- |
+| `hunk diff`                            | Split layout, watch enabled        |
+| `hunk show`                            | Unified layout                     |
+| `hunk diff --files before.ts after.ts` | Automatic layout, wrapping enabled |
+| `hunk show --mode split`               | Split layout; the CLI flag wins    |
+
+**Repository `hunk diff` uses `[vcs]`, not `[diff]`.** `[diff]` only applies to two-file comparisons. The [command table reference](/docs/reference/config/#command-tables) lists all supported tables, including `[open]`, `[patch]`, `[stash-show]`, and `[difftool]`.
+
+Tables change preferences, not command implementations or keyboard shortcuts. Keep shared settings above all tables: a key written below `[show]` belongs to `[show]`, not to the whole file.
+
+## Which setting wins?
+
+Hunk applies these layers in order, with later values winning:
+
+1. Built-in defaults.
+2. User config: shared settings, then the matching command table, then applicable `[pager]` settings.
+3. Repository config: the same sequence.
+4. Explicit CLI flags.
+
+A repository's shared setting can therefore override a user command-specific setting:
+
+```toml
+# User config
+[show]
+mode = "unified"
+```
+
+```toml
+# Repository .hunk/config.toml
+mode = "split"
+```
+
+Here, `hunk show` uses split. Run `hunk show --mode unified` to override it once. Boolean flags work too: `hunk diff --no-wrap` overrides `wrap_lines = true`.
+
+Some settings are user-only, such as keyboard bindings and `wheel_scroll_lines`. See [resolution and scope](/docs/reference/config/#resolution-and-scope) for restrictions.
+
+## Set pager preferences
+
+For diff reviews opened through `hunk pager`, add:
+
+```toml
 [pager]
 menu_bar = false
 wrap_lines = true
 ```
 
-Command sections are named after the input Hunk parses, which is not always the command you type. In particular, `hunk diff` on a repository reads `[vcs]`, not `[diff]`:
+Try it without changing your Git configuration:
 
-| Section        | Applies to                                                |
-| -------------- | --------------------------------------------------------- |
-| `[vcs]`        | `hunk diff` working-tree and target reviews               |
-| `[show]`       | `hunk show` commit reviews                                |
-| `[stash-show]` | `hunk stash show` reviews                                 |
-| `[diff]`       | two-file comparisons (`hunk diff --files <left> <right>`) |
-| `[patch]`      | `hunk patch` reviews                                      |
-| `[difftool]`   | `hunk difftool` pair reviews                              |
+```bash
+git -c core.pager="hunk pager" diff
+```
 
-`[pager]` is an overlay applied after the matching command section whenever the invocation uses pager-style behavior.
+`[pager]` overrides the matching command table within each config file. It doesn't apply to ordinary interactive reviews. Pager reviews start with the files pane closed; non-diff input uses a separate plain-text pager.
+
+See [Git pager and difftool](/docs/workflows/git-pager-and-difftool/) for permanent setup and fallback behavior.
+
+## Change keyboard shortcuts
+
+Use `[keybindings]` in your **user config**, not repository config:
+
+```toml
+[keybindings]
+"hunk.review.nextHunk" = ["]", "ctrl+n"]
+"hunk.app.quit" = "ctrl+x"
+```
+
+These replace the command's default keys. See [Keybindings](/docs/configure/keybindings/) for command ids, unbinding, and conflicts.
 
 ## Save interactive changes
 
 When you change view preferences and quit, Hunk can offer to persist them. It writes to an existing repository config when one exists; otherwise it keeps personal view choices in the user config. Set `prompt_save_view_preferences = false` to disable that prompt.
 
-The [config reference](/docs/reference/config/) lists every key, default, and alias. The root-only `[extensions]` table has its own guide: [Extensions](/docs/extend/extensions/).
+## Themes and extensions
+
+Theme definitions and extension settings belong in root tables, not inside command tables:
+
+- [Themes](/docs/configure/themes/): select built-in themes or define your own colors.
+- [Extensions](/docs/extend/extensions/): load extensions and configure `[extension.<id>]` settings.
+- [Troubleshooting](/docs/reference/config/#troubleshooting): check table names, precedence, and TOML placement when a setting has no effect.

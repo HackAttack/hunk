@@ -366,7 +366,8 @@ export const CONFIG_REFERENCE_OPTIONS: readonly ConfigReferenceOption[] = [
     type: "string",
     accepted: "`auto`, `split`, `unified`, or deprecated alias `stack`",
     runtimeDefault: DEFAULT_VIEW_PREFERENCES.mode,
-    description: "Choose responsive, side-by-side, or unified diff layout.",
+    description:
+      "Choose diff layout. `auto` uses split on wide terminals and unified on narrow ones; `split` and `unified` force that layout.",
   },
   {
     key: "cursor_line",
@@ -392,7 +393,8 @@ export const CONFIG_REFERENCE_OPTIONS: readonly ConfigReferenceOption[] = [
     type: "string",
     accepted: "`terminal`, `auto`, a built-in theme id, or a custom theme id",
     runtimeDefault: DEFAULT_THEME_ID,
-    description: "Select the active color theme.",
+    description:
+      "Select the color theme. `terminal` follows the terminal palette; `auto` chooses a light or dark GitHub theme from the terminal background (dark fallback).",
   },
   {
     key: "watch",
@@ -542,7 +544,9 @@ export const CONFIG_REFERENCE_OPTIONS: readonly ConfigReferenceOption[] = [
     property: "colorMoved",
     type: "boolean",
     accepted: "`true` or `false`",
-    description: "Enable moved-line coloring when the renderer supports it.",
+    defaultValue: "not set; Git uses its diff.colorMoved setting",
+    description:
+      "Request moved-line coloring for Git reviews. `true` requests zebra coloring when Git has no diff.colorMoved setting; an explicit Git setting takes precedence, even when this preference is false.",
   },
 ] as const;
 

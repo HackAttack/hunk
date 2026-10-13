@@ -186,7 +186,7 @@ line_numbers = true
 wrap_lines = false
 ```
 
-See the [config reference](https://hunk.dev/docs/reference/config/) for all options and defaults, or the [theme guide](https://hunk.dev/docs/configure/themes/) to customize colors.
+See the [configuration guide](https://hunk.dev/docs/configure/configuration/) for command overrides and examples, the [full reference](https://hunk.dev/docs/reference/config/) for every option, or the [theme guide](https://hunk.dev/docs/configure/themes/) to customize colors.
 
 ### Keybindings
 
