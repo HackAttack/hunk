@@ -53,7 +53,7 @@ Windows requires mise 2026.8.6 or newer. Nix users can use the `default` package
 
 Requirements:
 
-- macOS, Linux, or Windows
+- macOS (arm64, x64), Linux (arm64, x64; glibc), or Windows (x64); prebuilt binaries are not published for Windows on arm64 or musl-based Linux such as Alpine
 - On x86-64, a CPU with SSE4.2 (Intel Nehalem 2008+, AMD Bulldozer 2011+); arm64 has no CPU feature floor
 - Node.js 22+ for the npm install; the install script, Homebrew, mise, and Nix ship a standalone binary that does not require Node.js
 - Git recommended for most workflows
@@ -137,17 +137,14 @@ git diff --no-color | hunk patch -          # review a patch from stdin
 
 ### Working with agents
 
-1. Open Hunk in another terminal with `hunk diff` or `hunk show`.
-2. Tell your agent to add the skill file returned by `hunk skill path`.
-3. Ask your agent to use the skill against the live Hunk session.
+1. Install the review skill once: `npx skills add modem-dev/hunk -g --skill hunk-review`.
+2. Open Hunk in another terminal with `hunk diff` or `hunk show`.
+3. Ask your agent to use the hunk-review skill against the live Hunk session.
+4. Press `a` in Hunk to show agent notes; they start hidden.
 
-A good generic prompt is:
+If your agent has no skill system, ask it to run `hunk skill show` and follow the output.
 
-```text
-Load the Hunk skill and use it for this review. Run `hunk skill path` to get the skill path.
-```
-
-See [the agent workflow guide](docs/agent-workflows.md) for live sessions, `--agent-context`, and experimental rich notes.
+See [Review with an agent](https://hunk.dev/docs/agents/review-with-an-agent/) for live sessions, `--agent-context`, and experimental rich notes.
 
 ## Feature comparison
 
@@ -169,8 +166,8 @@ See [the agent workflow guide](docs/agent-workflows.md) for live sessions, `--ag
 
 You can persist preferences to a config file:
 
-- `~/.config/hunk/config.toml`
-- `.hunk/config.toml`
+- `$XDG_CONFIG_HOME/hunk/config.toml` (default `~/.config/hunk/config.toml`)
+- `.hunk/config.toml` in a repository
 
 Persistent state uses `$XDG_STATE_HOME/hunk/state.json` when the variable is
 absolute, or `~/.local/state/hunk/state.json` otherwise. Hunk preserves existing

@@ -7,19 +7,20 @@ Press `?` at any time for Hunk's in-app shortcut reference. Menus and primary re
 
 ## Navigate the review
 
-| Keys                      | Action                                                |
-| ------------------------- | ----------------------------------------------------- |
-| `↑` / `↓`, `k` / `j`      | Scroll one row                                        |
-| `Space` / `f`, `b`        | Page down / up                                        |
-| `Shift+Space`             | Page up                                               |
-| `d` / `u`                 | Half page down / up                                   |
-| `[` / `]`                 | Previous / next hunk                                  |
-| `,` / `.`                 | Previous / next file                                  |
-| `{` / `}`                 | Previous / next annotated hunk                        |
-| `/`                       | Search diff content                                   |
-| `n` / `N`                 | Next / previous search match                          |
-| `Home` / `End`, `g` / `G` | Start / end of review                                 |
-| `←` / `→`                 | Scroll unwrapped code; hold Shift for faster movement |
+| Keys                           | Action                                                |
+| ------------------------------ | ----------------------------------------------------- |
+| `↑` / `↓`, `k` / `j`           | Move the current line                                 |
+| `Space` / `f`, `b`             | Page down / up                                        |
+| `PageDown` / `PageUp`          | Page down / up                                        |
+| `Shift+Space`                  | Page up                                               |
+| `d` / `u`, `Ctrl+D` / `Ctrl+U` | Half page down / up                                   |
+| `[` / `]`                      | Previous / next hunk                                  |
+| `,` / `.`                      | Previous / next file                                  |
+| `{` / `}`                      | Previous / next annotated hunk                        |
+| `/`                            | Search diff content                                   |
+| `n` / `N`                      | Next / previous search match                          |
+| `Home` / `End`, `g` / `G`      | Start / end of review                                 |
+| `←` / `→`                      | Scroll unwrapped code; hold Shift for faster movement |
 
 Hunk navigation stays review-wide: hunk and file shortcuts move through the same multi-file stream shown in the main pane.
 
@@ -48,19 +49,30 @@ Hunk navigation stays review-wide: hunk and file shortcuts move through the same
 
 Hunk may offer to save view changes on quit. Saving writes personal preferences globally unless the repository already has a `.hunk/config.toml`.
 
-## Add a human note
+## Select, copy, and annotate
 
-Press `c` on the selected hunk or use a visible add-note affordance with the mouse. While editing, app shortcuts are suspended so normal text entry works. Save with the note editor's displayed action or cancel with Escape.
+| Key             | Action                                         |
+| --------------- | ---------------------------------------------- |
+| `v`             | Start a visual selection from the current line |
+| `y`             | Copy the selection                             |
+| `c`             | Add a note on the current line                 |
+| `Ctrl+S`        | Save the note you are editing                  |
+| `E` / `R` / `D` | Edit, reply to, or delete the active note      |
+| `?`             | Show every shortcut                            |
+
+Press `c` or use a visible add-note affordance with the mouse. While editing, app shortcuts are suspended so normal text entry works. Press `Ctrl+S` to save or Escape to cancel.
+
+Copying goes through the terminal clipboard protocol (OSC 52). If your terminal or multiplexer blocks it, Hunk reports that the clipboard is unavailable; see [terminal compatibility](/docs/help/compatibility/).
 
 ## Mouse behavior
 
 - Click a sidebar file to jump to it in the review stream.
 - Click menus and dialog actions instead of their key equivalents.
 - Use the wheel or scrollbar to move through the review; hold Shift while scrolling to move horizontally through unwrapped code.
-- Select diff text for copy where the terminal supports it.
+- Drag across diff rows to select them, then copy or comment from the selection's action bar.
 
 ## Remap the defaults
 
-Every shortcut above is a named command you can move to different keys with a `[keybindings]` table in your user config. See [Keybindings](/docs/configure/keybindings/). The file filter ships without its own key (Tab and the File menu reach it); `"hunk.review.focusFilter" = "/"` puts it back on `/` and hands search the remaining keys.
+Every shortcut above is a named command you can move to different keys with a `[keybindings]` table in your user config. See [Keybindings](/docs/configure/keybindings/). The file filter ships without its own key (Tab and the File menu reach it); `"hunk.review.focusFilter" = "/"` moves it to `/`, which leaves content search without a key until you bind `hunk.search.find` elsewhere.
 
 Terminal mouse protocols vary; see [terminal compatibility](/docs/help/compatibility/) if clicks or selection do not behave as expected.

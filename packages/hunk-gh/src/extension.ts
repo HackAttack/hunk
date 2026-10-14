@@ -13,7 +13,13 @@ import {
   fetchGitHubPullRequestMetadata,
   findOpenPullRequestForBranch,
 } from "./github";
-import { GITHUB_COMMIT_HELP, GITHUB_COMPARE_HELP, GITHUB_HELP, GITHUB_PR_HELP } from "./help";
+import {
+  GITHUB_CLI_REFERENCE,
+  GITHUB_COMMIT_HELP,
+  GITHUB_COMPARE_HELP,
+  GITHUB_HELP,
+  GITHUB_PR_HELP,
+} from "./help";
 import {
   parseGitHubCommitInvocation,
   parseGitHubCompareInvocation,
@@ -206,9 +212,9 @@ export function createGitHubPrExtension(
 
     hunk.registerCliCommand(
       {
-        name: "gh",
-        summary: "Review GitHub pull requests, commits, and comparisons",
-        usage: "<pr|commit|compare> <target> [--repo <owner/repo>]",
+        name: GITHUB_CLI_REFERENCE.name,
+        summary: GITHUB_CLI_REFERENCE.summary,
+        usage: GITHUB_CLI_REFERENCE.usage,
       },
       handler,
     );

@@ -50,6 +50,6 @@ A file-backed patch can use watch mode. It remains tied to that file path.
 git diff --no-color | hunk patch -
 ```
 
-Use `-` to make stdin explicit. Stdin is a snapshot, so it cannot use `--watch`; write the patch to a file when you need continuous reloads.
+Use `-` to make stdin explicit. Stdin is a snapshot, so it cannot use `--watch`; write the patch to a file when you need continuous reloads. A top-level `watch = true` in your config makes stdin reviews fail too; see [Watch mode](/docs/workflows/watch-mode/#turn-it-on-by-default).
 
 Patch-like input is parsed into the same file and hunk model as repository input. Non-diff text belongs in [pager mode](/docs/workflows/git-pager-and-difftool/), where Hunk can fall back to plain text.

@@ -73,11 +73,11 @@ With this config and no repository overrides:
 
 ### Pager settings
 
-`[pager]` applies when a diff opens as a pager session, such as Git output displayed by `hunk pager`. It overrides the matching command table **within the same file**, not in ordinary interactive reviews.
+`[pager]` applies when a diff opens as a pager session: Git output displayed by `hunk pager`, or any review launched with `--pager`. It overrides the matching command table **within the same file**, not in ordinary interactive reviews. `hunk pager` reviews match `[patch]`.
 
 ```toml
 [pager]
-menu_bar = false
+mode = "unified"
 wrap_lines = true
 ```
 
@@ -87,7 +87,7 @@ Try it for one Git invocation:
 git -c core.pager="hunk pager" diff
 ```
 
-Pager reviews start with the files pane closed, even if `sidebar = true`. Non-diff input goes to a plain-text pager instead; these view preferences do not configure that fallback. See [Git pager and difftool](/docs/workflows/git-pager-and-difftool/) for permanent setup.
+Pager reviews start with the files pane closed, even if `sidebar = true`, and hide the menu bar unless a config layer sets `menu_bar`. Non-diff input goes to a plain-text pager instead; these view preferences do not configure that fallback. See [Git pager and difftool](/docs/workflows/git-pager-and-difftool/) for permanent setup.
 
 ## Resolution and scope
 

@@ -20,7 +20,8 @@ Inside Hunk:
 1. Press `]` to jump to the next hunk.
 2. Press `.` to jump to the next file.
 3. Press `1`, `2`, or `0` for unified, split, or responsive auto layout.
-4. Press `q` to quit.
+4. Press `?` to see every shortcut.
+5. Press `q` to quit.
 
 ![Hunk showing a multi-file review stream with a file sidebar, split diff rows, and restrained terminal chrome](/docs/images/review-stream.webp)
 
@@ -45,8 +46,14 @@ hunk show HEAD~1 -- src/ui README.md
 hunk diff --watch
 ```
 
-Hunk reloads file- and Git-backed input while preserving the review experience. Watch mode is continuous; press `q` when finished.
+Hunk reloads the review as files change and keeps your place in it. Press `q` when finished. See [Watch mode](/docs/workflows/watch-mode/) for which inputs can be watched.
 
 ## Bring in an agent
 
-Keep Hunk open, then in another terminal ask your coding agent to run `hunk skill path` and use the returned review skill. Continue with [Review with an agent](/docs/agents/review-with-an-agent/).
+Install the review skill once:
+
+```bash
+npx skills add modem-dev/hunk -g --skill hunk-review
+```
+
+Keep Hunk open and ask your coding agent to walk you through the changes. Agent notes start hidden; press `a` to show them. Continue with [Review with an agent](/docs/agents/review-with-an-agent/).

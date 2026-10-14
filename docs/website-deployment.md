@@ -1,7 +1,6 @@
----
-title: Deployment integration
-description: Publish the Hunk landing page and documentation together from one Astro build.
----
+# Website deployment
+
+Publish the Hunk landing page and documentation together from one Astro build.
 
 The `website/` Astro project owns the complete `hunk.dev` site:
 
@@ -9,6 +8,8 @@ The `website/` Astro project owns the complete `hunk.dev` site:
 - `/docs/` and `/docs/*` are the Starlight documentation.
 - `/pagefind/` contains the documentation search index.
 - `/docs/hunk-review-skill.md` publishes the generated agent skill.
+- `/changelog/` and `/compare/` are generated from `CHANGELOG.md` and the comparison data.
+- `/install.sh` is the installer, staged into the build by `scripts/packaging/stage-install-script.ts`; `/install` rewrites to it.
 
 One static build keeps navigation, metadata, and deployment atomic. Do not copy the docs into the former `hunk-web` repository or operate a second docs origin.
 
@@ -28,7 +29,7 @@ Archive `website/dist/` as one deployable artifact. `bun run website:build` chec
 
 ## Deploy with Vercel
 
-The repository-level `vercel.json` defines the install command, build command, Astro framework, and `website/dist` output directory. It also rewrites `/api/release/latest` to the release-proxy Worker (`workers/release-proxy/`) so the installer and `hunk update` resolve releases from the apex domain rather than the Worker's own hostname. Configure one Vercel project with:
+The repository-level `vercel.json` defines the install command, build command, Astro framework, and `website/dist` output directory. Its `ignoreCommand` skips deployments for commits that touch none of the website, installer, docs generators, or `CHANGELOG.md`. It also rewrites `/install` to `/install.sh` and `/api/release/latest` to the release-proxy Worker (`workers/release-proxy/`) so the installer and `hunk update` resolve releases from the apex domain rather than the Worker's own hostname. Configure one Vercel project with:
 
 - **Git repository:** `modem-dev/hunk`
 - **Root directory:** repository root
@@ -45,7 +46,7 @@ Vercel should deploy pushes to `main` after the website and repository checks pa
 3. Verify production before disabling the old project.
 4. Archive `modem-dev/hunk-web` after the cutover so the landing page does not drift into a second implementation.
 
-The domain move is the only production switch. No proxy, rewrite, or `/docs` path mount is required.
+The domain move is the only production switch. No proxy or `/docs` path mount is required beyond the rewrites in `vercel.json`.
 
 ## Verify before switching traffic
 
@@ -55,6 +56,7 @@ curl --fail --location https://hunk.dev/docs/
 curl --fail https://hunk.dev/sitemap.xml
 curl --fail https://hunk.dev/pagefind/pagefind.js
 curl --fail https://hunk.dev/docs/hunk-review-skill.md
+curl --fail --silent https://hunk.dev/install.sh | head -1
 curl --fail https://hunk.dev/og.png
 curl --fail --location --silent --show-error --dump-header - https://hunk.dev/api/release/latest | grep --extended-regexp '^cache-control: no-store|"version"'
 ```

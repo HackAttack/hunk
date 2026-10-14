@@ -83,7 +83,7 @@ test("key human and machine-readable routes load", async ({ page, request }) => 
     "/docs/agents/review-with-an-agent/",
     "/docs/extend/file-previews/",
     "/docs/reference/cli/",
-    "/docs/help/deployment/",
+    "/docs/help/troubleshooting/",
   ]) {
     const response = await page.goto(route);
     expect(response?.ok(), route).toBe(true);

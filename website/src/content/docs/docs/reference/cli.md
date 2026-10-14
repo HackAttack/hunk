@@ -174,6 +174,120 @@ Status never fetches or modifies the repository; providers without status report
 | `--json`                       | emit a version 1 JSON snapshot                                           |
 | `--color <mode>`               | color output: auto, always, never                                        |
 
+## `hunk log`
+
+browse repository history
+
+### Usage
+
+```bash
+hunk log [target] [-- <pathspec...>]
+```
+
+A terminal opens the responsive browser; pipes and redirects receive static output.
+
+Use --static to force static output, paging when it exceeds the terminal.
+
+The selected VCS provider defines revision, filtering, and review semantics.
+
+### Command-specific options
+
+| Option                     | Description                                                     |
+| -------------------------- | --------------------------------------------------------------- |
+| `--all`                    | include history from every provider-visible head                |
+| `--first-parent`           | follow only the first parent of merge commits                   |
+| `-n, --max-count <count>`  | stop after this many commits                                    |
+| `--author <pattern>`       | limit commits by author                                         |
+| `--grep <pattern>`         | limit commits by subject or message                             |
+| `--since <date>`           | show commits newer than a provider date                         |
+| `--until <date>`           | show commits older than a provider date                         |
+| `--color <mode>`           | color output: auto, always, never                               |
+| `--format <format>`        | static record format: medium or compact                         |
+| `--oneline`                | alias for static --format compact                               |
+| `--theme <id>`             | use the same theme as Hunk review                               |
+| `--ascii`                  | use an ASCII graph                                              |
+| `--static`                 | print static output, paging when needed                         |
+| `--vcs <id>`               | select a VCS history provider                                   |
+| `--extension <path>`       | load an extension entry file or directory (repeatable)          |
+| `--no-extensions`          | disable user extensions for this run                            |
+| `--disable-extension <id>` | disable one bundled or user extension for this run (repeatable) |
+| `--enable-extension <id>`  | re-enable one extension for this run (repeatable)               |
+
+## `hunk gh`
+
+Review GitHub pull requests, commits, and comparisons. This command is provided by the bundled `hunk.gh` extension; disable it with `--disable-extension hunk.gh` or the [`[extensions]` config table](/docs/reference/config/#extensions).
+
+### Usage
+
+```bash
+hunk gh pr [pull-request] [--repo <owner/repo>] [-- <patch-options...>]
+hunk gh commit <commit> [--repo <owner/repo>] [-- <patch-options...>]
+hunk gh compare <base>...<head> [--repo <owner/repo>] [-- <patch-options...>]
+```
+
+### Command-specific options
+
+| Option                  | Description                                            |
+| ----------------------- | ------------------------------------------------------ |
+| `--repo <owner/repo>`   | use an explicit repository instead of the local origin |
+| `-- <patch-options...>` | pass the remaining options to the `hunk patch` review  |
+
+Patch options after `--` accept every [common review option](#common-review-options).
+
+**Authentication:** `GH_TOKEN`, then `GITHUB_TOKEN`; optional for public repositories.
+
+### `hunk gh pr`
+
+Review a GitHub pull request without requiring the gh CLI.
+
+```bash
+hunk gh pr [pull-request] [--repo <owner/repo>] [-- <patch-options...>]
+```
+
+**Pull request forms:**
+
+```bash
+hunk gh pr                            # find the open PR for the current branch
+hunk gh pr 123                        # infer owner/repo from the local origin
+hunk gh pr 123 --repo modem-dev/hunk  # use an explicit repository
+hunk gh pr 'modem-dev/hunk#123'       # name the repository and pull request
+hunk gh pr https://github.com/modem-dev/hunk/pull/123
+```
+
+### `hunk gh commit`
+
+Review a GitHub commit without requiring the gh CLI.
+
+```bash
+hunk gh commit <commit> [--repo <owner/repo>] [-- <patch-options...>]
+```
+
+**Commit forms:**
+
+```bash
+hunk gh commit abcdef1                        # infer owner/repo from the local origin
+hunk gh commit abcdef1 --repo modem-dev/hunk  # use an explicit repository
+hunk gh commit modem-dev/hunk@abcdef1         # name the repository and commit
+hunk gh commit https://github.com/modem-dev/hunk/commit/abcdef1
+```
+
+### `hunk gh compare`
+
+Review the changes between two GitHub branches, tags, or commits.
+
+```bash
+hunk gh compare <base>...<head> [--repo <owner/repo>] [-- <patch-options...>]
+```
+
+**Compare forms:**
+
+```bash
+hunk gh compare main...feature  # infer owner/repo from the local origin
+hunk gh compare v0.20.0...v0.21.0 --repo modem-dev/hunk
+```
+
+Use three dots exactly. Pass Hunk patch options after `--`.
+
 ## `hunk stash show`
 
 review a stash entry as a full Hunk changeset

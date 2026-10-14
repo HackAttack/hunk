@@ -3,7 +3,7 @@ title: Install
 description: Install Hunk with the install script, npm, Homebrew, mise, or Nix and verify the CLI.
 ---
 
-Hunk runs on macOS, Linux, and Windows. The install script is the default method on macOS and Linux; npm or mise covers Windows. npm installs require Node.js 22 or newer, while the install script, Homebrew, mise, and Nix installs are self-contained binaries that do not require Node.js. Git is recommended for the most common review workflows.
+Hunk publishes prebuilt binaries for macOS (arm64, x64), Linux (arm64, x64; glibc), and Windows (x64). On x86-64 it needs a CPU with SSE4.2 (2008 or newer). The install script is the default method on macOS and Linux; npm or mise covers Windows. npm installs require Node.js 22 or newer, while the install script, Homebrew, mise, and Nix installs are self-contained binaries that do not require Node.js. Git is recommended for the most common review workflows.
 
 ## Install script (default)
 
@@ -18,13 +18,13 @@ When the release publishes `SHA256SUMS` and your machine has `sha256sum` or `sha
 
 The script accepts these settings:
 
-| Setting                                            | Effect                                                                                      |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `HUNK_VERSION`                                     | Install an exact release instead of the newest one. Also accepted as a positional argument. |
-| `HUNK_INSTALL_DIR`                                 | Install the binary into this directory instead of `~/.hunk/bin`.                            |
-| `--no-modify-path` (or `HUNK_NO_MODIFY_PATH=1`)    | Leave shell startup files alone.                                                            |
-| `--force` (or `HUNK_ALLOW_CONFLICTING_INSTALLS=1`) | Install despite another Hunk on PATH or in a known version-manager directory.               |
-| `HUNK_DISABLE_ANALYTICS=1` or `DO_NOT_TRACK=1`     | Keep release discovery direct to GitHub instead of using Hunk's aggregate release endpoint. |
+| Setting                                            | Effect                                                                                                                                                                                             |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HUNK_VERSION`                                     | Install an exact release instead of the newest one. Also accepted as a positional argument.                                                                                                        |
+| `HUNK_INSTALL_DIR`                                 | Install into this directory instead of `~/.hunk`. The binary, a `skills/` folder, and `metadata.json` all go here, so use a dedicated directory rather than a shared one such as `/usr/local/bin`. |
+| `--no-modify-path` (or `HUNK_NO_MODIFY_PATH=1`)    | Leave shell startup files alone.                                                                                                                                                                   |
+| `--force` (or `HUNK_ALLOW_CONFLICTING_INSTALLS=1`) | Install despite another Hunk on PATH or in a known version-manager directory.                                                                                                                      |
+| `HUNK_DISABLE_ANALYTICS=1` or `DO_NOT_TRACK=1`     | Keep release discovery direct to GitHub instead of using Hunk's aggregate release endpoint.                                                                                                        |
 
 By default, the installer refuses to create a second Hunk installation. It lists every competing
 path it finds, its version and PATH precedence, and the command that removes it. Remove those

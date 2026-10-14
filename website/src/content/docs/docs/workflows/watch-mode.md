@@ -23,7 +23,7 @@ hunk patch changes.patch --watch
 
 ## Know what can reload
 
-Watch mode requires input Hunk can open again. Stdin-backed patches and stdin agent context cannot be watched:
+Watch mode requires an interactive terminal and input Hunk can open again. Piped output, stdin-backed patches, and stdin agent context cannot be watched:
 
 ```bash
 # Snapshot only; --watch would fail
@@ -31,6 +31,17 @@ some-command | hunk patch -
 ```
 
 Save changing output to a file or use a repository-backed command instead.
+
+## Turn it on by default
+
+Put `watch = true` in the [command table](/docs/configure/configuration/#override-settings-for-a-command) for the reviews you want watched, not at the top level of your config:
+
+```toml
+[vcs]
+watch = true
+```
+
+A top-level `watch = true` also applies to `hunk pager` and `hunk patch -`, which read stdin and cannot be watched, so those commands fail.
 
 ## Refresh manually
 

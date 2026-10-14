@@ -6,10 +6,18 @@ description: Contribute a version-control backend with detection, watch support,
 `hunk.registerVcsAdapter(adapter)` contributes an additional VCS backend. This is the same call Hunk's own bundled Git, Jujutsu, and Sapling backends make.
 
 ```ts
+/** Walk upward from the launch directory to the nearest Mercurial checkout. */
+function detect(cwd: string) {
+  for (let dir = resolve(cwd); ; dir = dirname(dir)) {
+    if (existsSync(join(dir, ".hg"))) return { id: "hg", repoRoot: dir };
+    if (dirname(dir) === dir) return null;
+  }
+}
+
 hunk.registerVcsAdapter({
   id: "hg",
   name: "Mercurial",
-  detect: (cwd) => (existsSync(join(cwd, ".hg")) ? { id: "hg", repoRoot: cwd } : null),
+  detect,
   operations: {
     "working-tree-diff": {
       async load(input, ctx) {
@@ -42,7 +50,7 @@ A `load` result is patch text plus how to label it. Everything else on it is opt
 
 ## Detection order
 
-Detection prefers the **nearest** checkout: a Git repository nested inside a jj workspace is reviewed as Git, whatever the priorities say. The same rule covers your adapter — a Mercurial checkout inside a Git repository is reviewed as Mercurial. `detectionPriority` only decides which backend wins when several recognize the _same_ directory — the colocated case, where one working copy carries two sets of markers.
+Hunk calls `detect` once with the directory Hunk was launched from, so your adapter must walk up to the checkout root itself, as the example above does. Detection then prefers the **nearest** checkout: a Git repository nested inside a jj workspace is reviewed as Git, whatever the priorities say. The same rule covers your adapter — a Mercurial checkout inside a Git repository is reviewed as Mercurial. `detectionPriority` only decides which backend wins when several recognize the _same_ directory — the colocated case, where one working copy carries two sets of markers.
 
 | Adapter                  | Priority                                     |
 | ------------------------ | -------------------------------------------- |

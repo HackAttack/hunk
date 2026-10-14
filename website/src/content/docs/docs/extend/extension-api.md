@@ -7,25 +7,38 @@ The extension factory receives one API object. Registration calls are only valid
 
 ## `hunk.apiVersion`
 
-The API generation this Hunk speaks (currently `28`). Branch on it if you want
-one file to support several Hunk versions. Version 28 adds host-owned syntax highlighting for file-view code documents; version 27 adds `ctx.selection.files`, the visible files in review order; version 26 adds the status line (`ctx.statusLine` items and `ctx.prompts.line()` inline prompts); version 25 adds Promise-returning watch signatures and watch cancellation; version 24 adds review metadata to VCS patch results and short display revisions to commit descriptors; version 23 adds canonical unified-layout fields while preserving the previous event vocabulary; version 22 adds frame-derived pane preferred sizing, non-resizable dynamic panes, and commit-history paint tokens; version 21 adds optional inclusive history-range review
-planning and bounded comparison commit summaries; version 20 adds optional commit timestamps to review
-metadata, pane clipboard actions, and the `theme.copyAction` paint token; version 19 adds provider-owned history enumeration and review planning; version 18 lets
-lifecycle and custom-event handlers request a host-owned review reload; version 17 adds structured review metadata to delegated
-patch commands and projects it into pane availability and component props; version 16 adds pane-wide
-`onActivate`; version 15 added `{ side, line }` to opted-in pane `currentLine`
-paint; version 14 added structured two-revision
-VCS diff endpoints; version 13 added saved-note parent identities
-and committed note-edit events; version 12 added responsive fractional pane
-sizing; version 11 added the `dim` line-highlight tone; version 10 added
-generic top-level CLI commands; version 9
-added exact-filename and glob selectors to `registerFileLanguage`; version 8
-added authoritative review snapshots to command handlers; version 7 added the
-current source line to command selection snapshots. Version 6 added session
-behavior, terminal-command observation, and live navigation/dialogs in lifecycle
-and bus handlers; version 5 added line highlighters and line-granular navigation
-(`revealLine`); version 4 added keyboard modes and docked panes, with API-v3
-sidebar names remaining as deprecated aliases.
+The API generation this Hunk speaks (currently `31`). Branch on it if you want one file to support several Hunk versions, or declare `"hunk": {"apiVersion": N}` in a folder extension's `package.json` so an older Hunk refuses to load it with a clear message.
+
+| Version | Adds                                                                                                      |
+| ------- | --------------------------------------------------------------------------------------------------------- |
+| 31      | Optional read-only VCS workspace status, sibling inspection, and status review planning                   |
+| 30      | The opaque current review generation (`reviewGeneration`) in pane props                                   |
+| 29      | Generation-scoped review presentation scopes                                                              |
+| 28      | Host-owned syntax highlighting for file-view code documents                                               |
+| 27      | `ctx.selection.files`, the visible files in review order                                                  |
+| 26      | The status line: `ctx.statusLine` items and `ctx.prompts.line()` inline prompts                           |
+| 25      | Promise-returning watch signatures and watch cancellation                                                 |
+| 24      | Review metadata on VCS patch results; short display revisions on commit descriptors                       |
+| 23      | Canonical unified-layout fields, keeping the previous event vocabulary                                    |
+| 22      | Frame-derived pane preferred sizing, non-resizable dynamic panes, commit-history paint tokens             |
+| 21      | Optional inclusive history-range review planning and bounded comparison commit summaries                  |
+| 20      | Optional commit timestamps in review metadata, pane clipboard actions, `theme.copyAction`                 |
+| 19      | Provider-owned history enumeration and review planning                                                    |
+| 18      | Lifecycle and custom-event handlers can request a host-owned review reload                                |
+| 17      | Structured review metadata on delegated patch commands, projected into panes                              |
+| 16      | Pane-wide `onActivate`                                                                                    |
+| 15      | `{ side, line }` on opted-in pane `currentLine` paint                                                     |
+| 14      | Structured two-revision VCS diff endpoints                                                                |
+| 13      | Saved-note parent identities and committed note-edit events                                               |
+| 12      | Responsive fractional pane sizing                                                                         |
+| 11      | The `dim` line-highlight tone                                                                             |
+| 10      | Generic top-level CLI commands                                                                            |
+| 9       | Exact-filename and glob selectors in `registerFileLanguage`                                               |
+| 8       | Authoritative review snapshots in command handlers                                                        |
+| 7       | The current source line in command selection snapshots                                                    |
+| 6       | Session behavior, terminal-command observation, live navigation and dialogs in lifecycle and bus handlers |
+| 5       | Line highlighters and line-granular navigation (`revealLine`)                                             |
+| 4       | Keyboard modes and docked panes; API-v3 sidebar names remain as deprecated aliases                        |
 
 ## `hunk.registerCliCommand(command, handler)`
 
@@ -488,7 +501,7 @@ Every handler and transform receives a context with `cwd` and `notify`; event an
 
 ## `hunk.log(message)`
 
-Record a diagnostic line. Logs are collected per extension rather than written to the terminal, because the TUI owns the screen.
+Record a diagnostic line. Logs are collected per extension rather than written to the terminal, because the TUI owns the screen. Hunk does not display collected logs yet, so use [`ctx.notify`](#ctxnotifymessage-type) while debugging.
 
 ## Not contributable yet
 

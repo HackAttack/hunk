@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { formatGitHubSubcommandUsage, GITHUB_CLI_REFERENCE } from "@hunk/gh";
 import {
   CLI_REFERENCE_COMMANDS,
   COMMON_REVIEW_OPTIONS,
@@ -14,6 +15,7 @@ import {
   CONFIG_REFERENCE_EXTENSIONS,
   CONFIG_REFERENCE_OPTIONS,
 } from "../../packages/hunk/src/core/run/config";
+import { findBundledCoreExtensionByCommand } from "../../packages/hunk/src/extensions/default/core";
 import { renderHunkReviewSkill } from "../../packages/hunk/src/hunk-review/skillDocument";
 import {
   type AgentCommandOption,
@@ -123,11 +125,73 @@ function renderUsage(lines: readonly string[]) {
   return ["```bash", ...lines, "```"].join("\n");
 }
 
+/** Render the bundled `hunk gh` extension command from its own help metadata. */
+function renderGitHubSection() {
+  const reference = GITHUB_CLI_REFERENCE;
+  const selectionId = findBundledCoreExtensionByCommand(reference.name)?.selectionId;
+  if (!selectionId) {
+    throw new Error(`No bundled extension owns \`hunk ${reference.name}\`.`);
+  }
+
+  const subcommandSections = reference.subcommands.map((subcommand) => {
+    const formWidth = Math.max(
+      ...subcommand.forms
+        .filter((form) => form.description)
+        .map((form) => `hunk gh ${subcommand.name} ${form.args}`.trimEnd().length),
+    );
+    const forms = subcommand.forms.map((form) => {
+      const invocation = `hunk gh ${subcommand.name} ${form.args}`.trimEnd();
+      return form.description
+        ? `${invocation.padEnd(formWidth)}  # ${form.description}`
+        : invocation;
+    });
+    const pieces = [
+      `### \`hunk gh ${subcommand.name}\``,
+      "",
+      subcommand.description,
+      "",
+      renderUsage([`hunk gh ${formatGitHubSubcommandUsage(subcommand)}`]),
+      "",
+      `**${subcommand.formsHeading}:**`,
+      "",
+      renderUsage(forms),
+    ];
+    for (const note of subcommand.notes ?? []) {
+      pieces.push("", proseSafe(note));
+    }
+    return pieces.join("\n");
+  });
+
+  return [
+    `## \`hunk ${reference.name}\``,
+    "",
+    `${reference.summary}. This command is provided by the bundled \`${selectionId}\` extension; disable it with \`--disable-extension ${selectionId}\` or the [\`[extensions]\` config table](/docs/reference/config/#extensions).`,
+    "",
+    "### Usage",
+    "",
+    renderUsage(
+      reference.subcommands.map(
+        (subcommand) => `hunk gh ${formatGitHubSubcommandUsage(subcommand)}`,
+      ),
+    ),
+    "",
+    "### Command-specific options",
+    "",
+    renderOptionTable(reference.options),
+    "",
+    "Patch options after `--` accept every [common review option](#common-review-options).",
+    "",
+    `**Authentication:** ${reference.authentication.variables.map((name) => `\`${name}\``).join(", then ")}; ${reference.authentication.description}.`,
+    "",
+    ...subcommandSections.flatMap((section, index) => (index > 0 ? ["", section] : [section])),
+  ].join("\n");
+}
+
 /** Render the deterministic exhaustive CLI reference. */
 export function renderCliReference() {
   const commandSections = (Object.values(CLI_REFERENCE_COMMANDS) as CliReferenceCommand[])
     .filter((command) => command.publicDocs !== false)
-    .map((command) => {
+    .flatMap((command) => {
       const pieces = [
         `## \`hunk ${command.path}\``,
         "",
@@ -171,7 +235,11 @@ export function renderCliReference() {
           `| \`${UNSAFE_ALLOW_REMOTE_SESSION_BROKER_ENV}\` | Set to \`1\` to allow unsafe non-loopback binding. |`,
         );
       }
-      return pieces.join("\n");
+
+      // Bundled extension commands follow `hunk log`, matching their place in `hunk --help`.
+      return command.path === "log"
+        ? [pieces.join("\n"), renderGitHubSection()]
+        : [pieces.join("\n")];
     });
 
   const sessionSections = SESSION_AGENT_COMMAND_LIST.map((command) => {
@@ -430,11 +498,11 @@ ${sectionRows.length > 0 ? ["| Table | Applies to |", "| --- | --- |", ...sectio
 
 ### Pager settings
 
-\`[pager]\` applies when a diff opens as a pager session, such as Git output displayed by \`hunk pager\`. It overrides the matching command table **within the same file**, not in ordinary interactive reviews.
+\`[pager]\` applies when a diff opens as a pager session: Git output displayed by \`hunk pager\`, or any review launched with \`--pager\`. It overrides the matching command table **within the same file**, not in ordinary interactive reviews. \`hunk pager\` reviews match \`[patch]\`.
 
 \`\`\`toml
 [pager]
-menu_bar = false
+mode = "unified"
 wrap_lines = true
 \`\`\`
 
@@ -444,7 +512,7 @@ Try it for one Git invocation:
 git -c core.pager="hunk pager" diff
 \`\`\`
 
-Pager reviews start with the files pane closed, even if \`sidebar = true\`. Non-diff input goes to a plain-text pager instead; these view preferences do not configure that fallback. See [Git pager and difftool](/docs/workflows/git-pager-and-difftool/) for permanent setup.
+Pager reviews start with the files pane closed, even if \`sidebar = true\`, and hide the menu bar unless a config layer sets \`menu_bar\`. Non-diff input goes to a plain-text pager instead; these view preferences do not configure that fallback. See [Git pager and difftool](/docs/workflows/git-pager-and-difftool/) for permanent setup.
 
 ## Resolution and scope
 

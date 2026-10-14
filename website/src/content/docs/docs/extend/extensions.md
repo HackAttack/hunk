@@ -98,7 +98,7 @@ Community extensions are listed at [hunk.dev/extensions](/extensions/), and the 
 
 A publishable extension repository is the folder-extension layout at the repository root — `package.json` with a `hunk` field (or an `index.*` entry), code, README. To share one:
 
-1. Fill in `package.json`'s `name`, `version`, and `description`, and declare `"hunk": {"apiVersion": N}` if you rely on recent API surface — an older Hunk then refuses the install cleanly instead of failing mid-load.
+1. Fill in `package.json`'s `name`, `version`, and `description`, and declare `"hunk": {"apiVersion": N}` if you rely on recent API surface — an older Hunk then refuses to load it with a clear message instead of failing partway through.
 2. Keep `dependencies` real: they are installed into the extension's own `node_modules` at install time. `react`, `@opentui/*`, and `hunkdiff/extension` come from the host at runtime and belong in `devDependencies`.
 3. Tag releases so users can pin with `@v1.2.0`.
 4. Push to any git host and add the **`hunk-extension`** GitHub topic, then open a pull request to list it on [hunk.dev/extensions](/extensions/).
@@ -130,7 +130,7 @@ Run this repository's extensions?
 
 **Trust** records the decision and reloads the session; **not now** asks again next time; **never** stops the offers. The prompt is a dialog over the review stream, not a gate in front of it — dismiss it and keep reviewing.
 
-Decisions are stored per repository root in `~/.config/hunk/state.json`, keyed by path (the VS Code workspace-trust model). A different repository later occupying a trusted path inherits the decision; clear the entry if that matters for a path you reuse.
+Decisions are stored per repository root in `$XDG_STATE_HOME/hunk/state.json` (by default `~/.local/state/hunk/state.json`), keyed by path (the VS Code workspace-trust model). A different repository later occupying a trusted path inherits the decision; clear the entry if that matters for a path you reuse.
 
 ## Failure isolation
 

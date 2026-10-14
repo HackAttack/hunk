@@ -299,10 +299,8 @@ export const CLI_REFERENCE_COMMANDS = {
   },
   log: {
     path: "log",
-    // Release preparation enables this when an installable build contains history browsing.
-    publicDocs: false,
-    summary: "browse an attractive repository history",
-    synopsis: ["hunk log [revision-expression] [-- <pathspec...>]"],
+    summary: "browse repository history",
+    synopsis: ["hunk log [target] [-- <pathspec...>]"],
     details: [
       "A terminal opens the responsive browser; pipes and redirects receive static output.",
       "Use --static to force static output, paging when it exceeds the terminal.",
@@ -750,7 +748,7 @@ function renderCliHelp() {
     "  hunk diff --files <left> <right>        compare two concrete files",
     "  hunk show [target] [-- <pathspec...>]   review the last commit or a given target",
     "  hunk status [--static | --json]          inspect this workspace and sibling worktrees",
-    "  hunk log [target] [-- <pathspec...>]    browse an attractive repository history",
+    "  hunk log [target] [-- <pathspec...>]    browse repository history",
     "  hunk gh <pr|commit|compare>             review changes hosted on GitHub",
     "  hunk stash show [ref]                   review a stash entry (git only)",
     "  hunk patch [file]                       review a patch file or stdin",
@@ -1215,7 +1213,7 @@ async function parseHistoryCommand(
 ): Promise<ParsedCliInput> {
   const { commandTokens, pathspecs } = splitPathspecArgs(tokens);
   const command = createCliReferenceCommand("log")
-    .argument("[revision]")
+    .argument("[target]")
     // Accept the former opt-in spelling during migration without presenting two experiences.
     .addOption(new Option("--interactive").hideHelp());
   let revision: string | undefined;

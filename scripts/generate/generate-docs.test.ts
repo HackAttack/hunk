@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { GITHUB_CLI_REFERENCE } from "@hunk/gh";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -17,6 +18,7 @@ import {
   UNSAFE_ALLOW_REMOTE_SESSION_BROKER_ENV,
 } from "../../packages/hunk/src/session/broker/brokerConfig";
 import { LEGACY_THEME_ID_ALIASES } from "../../packages/hunk/src/core/theme/catalog";
+import { parseCli } from "../../packages/hunk/src/app/cli";
 import {
   CONFIG_REFERENCE_GROUPS,
   CONFIG_THEME_COLOR_DESCRIPTIONS,
@@ -42,7 +44,7 @@ describe("generated website references", () => {
     expect(reference).toContain("hunk diff --staged");
     expect(reference).toContain("--no-transparent-bg");
     expect(reference).toContain("hunk markup render");
-    expect(reference).not.toContain("## `hunk log`");
+    expect(reference).toContain("hunk log [target] [-- <pathspec...>]");
     const statusSection = reference.split("## `hunk status`")[1]!.split("\n## ")[0]!;
     expect(statusSection).toContain("`--vcs <id>`");
     expect(statusSection).toContain("Q returns or quits");
@@ -65,6 +67,45 @@ describe("generated website references", () => {
       }
     }
     expect(reference).toContain("for `--file` navigation, exactly one of");
+  });
+
+  test("documents every top-level command listed in `hunk --help`", async () => {
+    const help = await parseCli(["bun", "hunk", "--help"]);
+    if (help.kind !== "help") throw new Error("Expected top-level help output.");
+    const commandBlock = help.text.split("Commands:\n")[1]!.split("\n\n")[0]!;
+    const commandPaths = new Set(
+      commandBlock.split("\n").map((line) => {
+        const usage = line.trim().split(/\s{2,}/)[0]!;
+        const words = usage.split(" ").slice(1);
+        const argumentIndex = words.findIndex((word) => /^[[<(-]/.test(word));
+        return words.slice(0, argumentIndex < 0 ? undefined : argumentIndex).join(" ");
+      }),
+    );
+    const reference = renderCliReference();
+
+    expect(commandPaths).toContain("log");
+    expect(commandPaths).toContain("gh");
+    for (const path of commandPaths) {
+      expect(reference).toMatch(new RegExp(`^## \x60hunk ${path}[\x60 ]`, "m"));
+    }
+  });
+
+  test("renders the bundled GitHub command from its help metadata", () => {
+    const reference = renderCliReference();
+    const githubSection = reference.split("## `hunk gh`")[1]!.split("\n## ")[0]!;
+
+    expect(reference.indexOf("## `hunk log`")).toBeLessThan(reference.indexOf("## `hunk gh`"));
+    for (const option of GITHUB_CLI_REFERENCE.options) {
+      expect(githubSection).toContain(`\`${option.flag}\``);
+    }
+    for (const subcommand of GITHUB_CLI_REFERENCE.subcommands) {
+      expect(githubSection).toContain(`### \`hunk gh ${subcommand.name}\``);
+      for (const form of subcommand.forms) {
+        expect(githubSection).toContain(`hunk gh ${subcommand.name} ${form.args}`.trimEnd());
+      }
+    }
+    expect(githubSection).toContain("`GH_TOKEN`, then `GITHUB_TOKEN`");
+    expect(githubSection).toContain("--disable-extension hunk.gh");
   });
 
   test("renders every runtime-parsed config key with defaults and compatibility metadata", () => {

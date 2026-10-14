@@ -90,11 +90,11 @@ Some settings are user-only, such as keyboard bindings and `wheel_scroll_lines`.
 
 ## Set pager preferences
 
-For diff reviews opened through `hunk pager`, add:
+For diff reviews opened through `hunk pager` or with `--pager`, add:
 
 ```toml
 [pager]
-menu_bar = false
+mode = "unified"
 wrap_lines = true
 ```
 
@@ -104,7 +104,7 @@ Try it without changing your Git configuration:
 git -c core.pager="hunk pager" diff
 ```
 
-`[pager]` overrides the matching command table within each config file. It doesn't apply to ordinary interactive reviews. Pager reviews start with the files pane closed; non-diff input uses a separate plain-text pager.
+`hunk pager` reviews resolve like `hunk patch` reviews: Hunk applies the `[patch]` table, then `[pager]` on top of it, within each config file. `[pager]` doesn't apply to ordinary interactive reviews. Pager reviews start with the files pane closed and, unless a config layer sets `menu_bar`, the menu bar hidden; non-diff input uses a separate plain-text pager.
 
 See [Git pager and difftool](/docs/workflows/git-pager-and-difftool/) for permanent setup and fallback behavior.
 

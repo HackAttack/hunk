@@ -17,7 +17,7 @@ hunk diff --mode unified
 - `split` keeps before and after columns side by side.
 - `unified` shows changed rows in a single-width flow.
 
-Explicit split and unified choices override responsive behavior. Press `0`, `1`, or `2` to switch while reviewing. The former `stack` value remains accepted as a deprecated input alias and normalizes to `unified`.
+Explicit split and unified choices override responsive behavior. While reviewing, press `0` for auto, `1` for unified, or `2` for split. The former `stack` value remains accepted as a deprecated input alias and normalizes to `unified`.
 
 ## Tune code rows
 
@@ -47,7 +47,7 @@ transparent_background = false
 cursor_line = "row"
 ```
 
-`transparent_background` lets the terminal paint Hunk surfaces; turn it off when exact theme surfaces matter more than matching terminal transparency.
+`transparent_background` lets the terminal's own background show through Hunk surfaces. It is off by default; turn it on when matching a transparent or blurred terminal matters more than exact theme colors.
 
 Set `animations = false` to make panes open and close immediately.
 

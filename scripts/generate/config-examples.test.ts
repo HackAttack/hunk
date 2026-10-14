@@ -127,21 +127,21 @@ for (const [name, markdown] of Object.entries(pages)) {
     test("pager table overrides a command only for pager sessions, and flags still win", () => {
       const pager = findTestTomlBlock(markdown, (value) => Boolean(value.pager));
       const files = createTestConfigFiles(
-        `wrap_lines = false\n[patch]\nwrap_lines = false\nmenu_bar = true\n${pager}`,
+        `wrap_lines = false\n[patch]\nwrap_lines = false\nmode = "split"\n${pager}`,
       );
       const interactive = resolveConfiguredCliInput(
         { kind: "patch", file: "-", options: {} },
         files,
       );
       expect(interactive.input.options.wrapLines).toBe(false);
-      expect(interactive.input.options.menuBar).toBe(true);
+      expect(interactive.input.options.mode).toBe("split");
 
       const paged = resolveConfiguredCliInput(
         { kind: "patch", file: "-", options: { pager: true } },
         files,
       );
       expect(paged.input.options.wrapLines).toBe(true);
-      expect(paged.input.options.menuBar).toBe(false);
+      expect(paged.input.options.mode).toBe("unified");
 
       const explicit = resolveConfiguredCliInput(
         { kind: "patch", file: "-", options: { pager: true, wrapLines: false } },

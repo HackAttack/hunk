@@ -27,11 +27,12 @@ hunk diff --cached
 ## Compare against a target
 
 ```bash
-hunk diff main
+hunk diff main                    # working tree against main
 hunk diff main...feature -- src/core
+hunk diff v1.2.0 v1.3.0           # two revisions
 ```
 
-Arguments after `--` are pathspecs. Before `--`, the target is interpreted by the detected VCS.
+Arguments after `--` are pathspecs. Before `--`, the target is interpreted by the detected VCS. In Jujutsu, a single target means something different; see [Jujutsu and Sapling](/docs/workflows/jujutsu-and-sapling/).
 
 ## Review a commit
 
@@ -40,7 +41,7 @@ hunk show
 hunk show HEAD~2 -- README.md src/ui
 ```
 
-`show` defaults to the latest commit. The loaded files still form one review stream, so path filtering changes the input rather than changing navigation behavior.
+`show` defaults to the latest commit in Git and Sapling, and to the working-copy change `@` in Jujutsu. The loaded files still form one review stream, so path filtering changes the input rather than changing navigation behavior.
 
 ## Review a stash
 
