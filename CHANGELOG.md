@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.24.0-beta.1
+
+### Patch Changes
+
+- [#1182](https://github.com/modem-dev/hunk/pull/1182) [`08c3da7`](https://github.com/modem-dev/hunk/commit/08c3da70d82b512c61c585c9445dd94599144b16) - Show an empty-review message instead of claiming an active filter hid files when there are no changes to review.
+
+- [#1186](https://github.com/modem-dev/hunk/pull/1186) [`d8cd77b`](https://github.com/modem-dev/hunk/commit/d8cd77bbfc053bedbeeb049207effcd4ba86039c) - The bundled `hunk-review` skill now tells agents that agent notes start hidden, `hunk gh --help` lists its options and token variables, and the hunk.dev docs add `hunk log` and `hunk gh` to the CLI reference and correct stale install, platform, pager, watch, Jujutsu, and extension details.
+
+- [#1183](https://github.com/modem-dev/hunk/pull/1183) [`b0afaab`](https://github.com/modem-dev/hunk/commit/b0afaabeafc93357c1618c80c87ed8753a7f56e3) - Reject nonempty patch input without recognizable file changes instead of silently opening an empty review.
+
+- [#1178](https://github.com/modem-dev/hunk/pull/1178) [`d3543c6`](https://github.com/modem-dev/hunk/commit/d3543c618374b648510183237904cdd5251f6425) - Binary files can be selected again with next/previous file navigation (`.` and `,`) and by clicking them in the files pane.
+
+- [#1085](https://github.com/modem-dev/hunk/pull/1085) [`654a14a`](https://github.com/modem-dev/hunk/commit/654a14a8d13caabc1f56b5888d4d960cd1b74c88) - Keep the selected file visible in the sidebar during held next-file or previous-file navigation and terminal resizing without snapping ordinary manual scrolling back to the selection.
+
 ## 0.24.0-beta.0
 
 ### Minor Changes
