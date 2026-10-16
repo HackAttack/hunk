@@ -143,7 +143,7 @@ Select the color theme. `terminal` follows the terminal palette; `auto` chooses 
 
 - **Type:** string
 - **Accepted:** `terminal`, `auto`, a built-in theme id, or a custom theme id
-- **Built-in default:** `terminal`
+- **Built-in default:** `github-dark-default`
 
 #### `line_numbers`
 

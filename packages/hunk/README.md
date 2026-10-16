@@ -177,7 +177,7 @@ and falling back to it if migration fails. Global extension paths are unchanged.
 For example:
 
 ```toml
-theme = "terminal"
+theme = "github-dark-default"
 mode = "auto"               # auto, split, unified
 auto_split_min_width = 160  # minimum available diff columns for split in auto mode
 line_numbers = true

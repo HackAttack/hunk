@@ -512,13 +512,17 @@ export function availableThemes(
  *
  * Custom themes are matched before bundled ids so a custom theme that reuses a
  * deprecated built-in alias still resolves to what the user actually defined. No id, or
- * an id nothing defines, resolves to the `terminal` theme.
+ * an id nothing defines, resolves to the GitHub theme for the current light/dark mode.
  */
 export function resolveTheme(
   requested: string | undefined,
   themeMode: ThemeMode | null,
   customThemes: readonly NamedCustomThemeConfig[] = [],
 ) {
+  if (requested === TERMINAL_THEME_ID) {
+    return buildTerminalTheme(themeMode);
+  }
+
   if (requested === "auto") {
     return autoTheme(themeMode);
   }
@@ -533,7 +537,7 @@ export function resolveTheme(
     return exact;
   }
 
-  return buildTerminalTheme(themeMode);
+  return autoTheme(themeMode);
 }
 
 /**
