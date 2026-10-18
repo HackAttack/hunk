@@ -28,6 +28,8 @@ export interface DiffSectionRowBounds extends VerticalBounds {
   stableKeys: string[];
   /** Exact collapsed gap that produced this synthesized source row. */
   expandedGapKey?: string;
+  /** Selectable semantic note at this row; drafts and decoration-only cards omit it. */
+  noteTarget?: { noteId: string; hunkIndex: number };
 }
 
 /**
@@ -67,7 +69,7 @@ function notesCacheKey(visibleAgentNotes: VisibleAgentNote[]) {
   }
 
   return `:notes:${visibleAgentNotes
-    .map(({ annotation, actions, thread }) => {
+    .map(({ annotation, actions, thread, source }) => {
       const key = JSON.stringify({
         author: annotation.author,
         id: annotation.id,
@@ -77,6 +79,9 @@ function notesCacheKey(visibleAgentNotes: VisibleAgentNote[]) {
         source: annotation.source,
         summary: annotation.summary,
         title: annotation.title,
+        // Bounds also carry keyboard note targets, including whether this card is selectable.
+        noteId: thread?.noteId,
+        noteSource: source,
         parentId: thread?.parentId,
         threadDepth: thread?.depth,
         actions: actions
@@ -374,8 +379,13 @@ export function measureDiffSectionGeometry(
       row.stableKey,
       ...(row.kind === "diff-row" ? (row.stableAliasKeys ?? []) : []),
     ];
-    const rowBoundsEntry = {
+    const noteId =
+      row.kind === "inline-note" && row.note.source !== "draft"
+        ? row.note.thread?.noteId
+        : undefined;
+    const rowBoundsEntry: DiffSectionRowBounds = {
       key: row.key,
+      ...(noteId ? { noteTarget: { noteId, hunkIndex: row.hunkIndex } } : {}),
       stableKey: row.stableKey,
       stableKeys,
       ...(row.kind === "diff-row" &&
