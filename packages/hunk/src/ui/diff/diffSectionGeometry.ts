@@ -123,8 +123,8 @@ interface SectionGeometryCacheSlots {
 
 // Cache geometry by immutable DiffFile object so hunk navigation can survive parent re-renders
 // without rebuilding every file section. Replaced file objects naturally drop from the WeakMap.
-// Keep one no-note and one note-aware variant: large row-bounds arrays from old terminal widths
-// are replaced on resize, while note rendering can still compare against a stable base geometry.
+// Keep one no-note and one note-aware variant. Note-free nowrap geometry survives resizing;
+// width-sensitive variants replace old row-bounds arrays within their own bounded slot.
 const SECTION_GEOMETRY_CACHE = new WeakMap<DiffFile, SectionGeometryCacheSlots>();
 
 /** Resolve which bounded per-file cache slot owns one geometry variant. */
@@ -310,9 +310,10 @@ export function measureDiffSectionGeometry(
     };
   }
 
-  // Width, wrapping, and line-number visibility all affect rendered row heights, so they must
-  // participate in the cache key alongside the structural file/layout inputs. Expansion state
-  // changes the row stream, so it has to participate too.
+  // Only wrapped code and inline notes have width-sensitive heights. Keep live width for
+  // measurement, but reuse note-free nowrap bounds and lazy rows across terminal resizes.
+  // Preserve structural and rendering policies, including expansion/source state, in the key.
+  const geometryCacheWidth = wrapLines || visibleAgentNotes.length > 0 ? width : 0;
   const themeCacheKey = [
     theme.id,
     theme.syntaxTheme ?? "",
@@ -327,7 +328,7 @@ export function measureDiffSectionGeometry(
   const scopeCacheKey = visibleHunkIndexes
     ? `:scope:${[...visibleHunkIndexes].sort((a, b) => a - b).join(",")}`
     : "";
-  const cacheKey = `${file.id}:${layout}:${showHunkHeaders ? 1 : 0}:${themeCacheKey}:${width}:${showLineNumbers ? 1 : 0}:${wrapLines ? 1 : 0}:${reserveAddNoteColumn ? 1 : 0}:tabs:${tabWidth}:hunkGap:${hunkGap}${scopeCacheKey}${expansionCacheKey(expandedKeys, sourceStatus)}${notesCacheKey(visibleAgentNotes)}`;
+  const cacheKey = `${file.id}:${layout}:${showHunkHeaders ? 1 : 0}:${themeCacheKey}:${geometryCacheWidth}:${showLineNumbers ? 1 : 0}:${wrapLines ? 1 : 0}:${reserveAddNoteColumn ? 1 : 0}:tabs:${tabWidth}:hunkGap:${hunkGap}${scopeCacheKey}${expansionCacheKey(expandedKeys, sourceStatus)}${notesCacheKey(visibleAgentNotes)}`;
   const cacheSlot = sectionGeometryCacheSlot(visibleAgentNotes);
   const cached = getCachedSectionGeometry(file, cacheSlot, cacheKey);
   if (cached) {
