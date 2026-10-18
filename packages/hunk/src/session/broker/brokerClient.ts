@@ -93,6 +93,10 @@ interface ClientConnectionGeneration {
   readonly id: symbol;
 }
 
+type IncumbentWait =
+  | { kind: "build-skew"; fingerprint: string | null; buildKnown: boolean }
+  | { kind: "payload"; fingerprint: string | null };
+
 type StartupLifecycleState =
   | { status: "idle" }
   | {
@@ -157,10 +161,7 @@ export class SessionBrokerClient {
   private connectionGeneration: ClientConnectionGeneration | null = null;
   private lastConnectionWarning: string | null = null;
   private credentials: HunkSessionBrokerCredentials | null = null;
-  private waitingForIncumbentExit = false;
-  private incumbentLaunchFingerprint: string | null = null;
-  /** Whether the current incumbent has given a definitive answer about its build. */
-  private incumbentBuildKnown = false;
+  private incumbentWait: IncumbentWait | null = null;
   private connectionState: HunkDaemonConnectionState = { status: "connected" };
   private readonly noticeListeners = new Set<(notice: string | null) => void>();
   private readonly lifecycleClock: SessionBrokerLifecycleClock;
@@ -252,14 +253,18 @@ export class SessionBrokerClient {
   }
 
   /** Ask the daemon which build it is and refine the refused-hello notice by direction. */
-  private refineRefusalNotice(config: ResolvedSessionBrokerConfig, isCurrent: () => boolean) {
+  private refineRefusalNotice(
+    config: ResolvedSessionBrokerConfig,
+    wait: Extract<IncumbentWait, { kind: "build-skew" }>,
+    isCurrent: () => boolean,
+  ) {
     const probe = this.timing.probeDaemonStatus ?? probeHunkSessionDaemonAdminStatus;
     void probe(config).then(
       (result) => {
-        if (!isCurrent() || !this.waitingForIncumbentExit) return;
+        if (!isCurrent() || this.incumbentWait !== wait) return;
         // "Unavailable" is the one answer worth asking again for: it means the probe itself did
         // not land. A daemon that refuses the admin scope has answered definitively.
-        this.incumbentBuildKnown = result.kind !== "unavailable";
+        wait.buildKnown = result.kind !== "unavailable";
         const { direction, notice } = daemonSkewNotice(result);
         this.setConnectionState({ status: "disconnected", notice, direction });
       },
@@ -275,9 +280,13 @@ export class SessionBrokerClient {
   ) {
     // Let the connection validate/send first. If it throws, the client keeps
     // serving the previous registration and snapshot as one coherent pair.
+    const wait = this.incumbentWait;
     this.connection?.replaceSession(registration, snapshot);
     this.registration = registration;
     this.snapshot = snapshot;
+    // Release only the refusal this replacement retries, after the local pair commits. A newer
+    // reentrant refusal must survive; snapshot updates alone do not release either payload refusal.
+    if (wait?.kind === "payload" && this.incumbentWait === wait) this.incumbentWait = null;
   }
 
   private resolveConfig() {
@@ -401,21 +410,27 @@ export class SessionBrokerClient {
           );
           if (!isCommitAuthorized()) return;
         }
-        if (this.waitingForIncumbentExit) {
+        const wait = this.incumbentWait;
+        if (wait) {
           const healthy = await isSessionBrokerHealthy(config);
           if (!isCommitAuthorized()) return;
-          if (healthy) {
+          // A replacement can release payload waiting without changing the socket generation.
+          // Never let an older health result reinstate that wait or clear a newer refusal.
+          const currentWait = this.incumbentWait;
+          if (currentWait) {
             const currentFingerprint = readSessionBrokerLaunchFingerprint(config);
             if (!isCommitAuthorized()) return;
-            // Owner-private metadata is only a generation-change hint. The signed hello remains the
-            // sole compatibility and identity authority, and unchanged/malformed metadata causes
-            // health-only polling so skewed waiters cannot keep the incumbent active.
-            if (currentFingerprint === this.incumbentLaunchFingerprint) {
-              throw new Error(HUNK_DAEMON_UPGRADE_WAIT_MESSAGE);
+            // Metadata is only a generation-change hint. Null-to-null remains quiescent too;
+            // the signed hello still owns compatibility and identity after a retry.
+            if (currentWait !== wait || (healthy && currentFingerprint === wait.fingerprint)) {
+              throw new Error(
+                currentWait.kind === "payload"
+                  ? HUNK_DAEMON_REGISTRATION_REJECTED_MESSAGE
+                  : HUNK_DAEMON_UPGRADE_WAIT_MESSAGE,
+              );
             }
+            this.incumbentWait = null;
           }
-          if (!isCommitAuthorized()) return;
-          this.waitingForIncumbentExit = false;
         }
         await this.ensureDaemonAvailable(config, isCommitAuthorized);
         if (!isCommitAuthorized()) return;
@@ -428,25 +443,31 @@ export class SessionBrokerClient {
           // One incumbent, one probe: a running daemon's build cannot change, so re-asking on
           // every reconnect would only churn caller sessions and overwrite the refined notice
           // with the generic one. A different launch fingerprint means a different daemon.
-          const sameIncumbent =
-            this.waitingForIncumbentExit && this.incumbentLaunchFingerprint === fingerprint;
-          this.waitingForIncumbentExit = true;
-          this.incumbentLaunchFingerprint = fingerprint;
-          if (!sameIncumbent) {
-            this.incumbentBuildKnown = false;
+          const previousWait = this.incumbentWait;
+          const wait: Extract<IncumbentWait, { kind: "build-skew" }> =
+            previousWait?.kind === "build-skew" && previousWait.fingerprint === fingerprint
+              ? previousWait
+              : { kind: "build-skew", fingerprint, buildKnown: false };
+          this.incumbentWait = wait;
+          if (wait !== previousWait) {
             this.setConnectionState({
               status: "disconnected",
               notice: HUNK_DAEMON_UPGRADE_WAIT_MESSAGE,
               direction: "unknown",
             });
-            this.refineRefusalNotice(config, () => isConnectionCurrent(brokerGeneration));
-          } else if (!this.incumbentBuildKnown) {
+            this.refineRefusalNotice(config, wait, () => isConnectionCurrent(brokerGeneration));
+          } else if (!wait.buildKnown) {
             // A probe that never landed would otherwise leave this window on the generic notice
             // for the incumbent's whole life — including when the daemon is the newer build and
             // closing older windows cannot help. Retry without disturbing the notice on screen.
-            this.refineRefusalNotice(config, () => isConnectionCurrent(brokerGeneration));
+            this.refineRefusalNotice(config, wait, () => isConnectionCurrent(brokerGeneration));
           }
         } else if (isRegistrationRejection(event)) {
+          // Publish ownership before subscribers can synchronously replace the review or stop.
+          this.incumbentWait = {
+            kind: "payload",
+            fingerprint: readSessionBrokerLaunchFingerprint(config),
+          };
           this.setConnectionState({
             status: "disconnected",
             notice: HUNK_DAEMON_REGISTRATION_REJECTED_MESSAGE,
@@ -459,14 +480,21 @@ export class SessionBrokerClient {
       },
       onConnected: (brokerGeneration) => {
         if (!isConnectionCurrent(brokerGeneration)) return;
-        this.waitingForIncumbentExit = false;
-        this.incumbentLaunchFingerprint = null;
-        this.incumbentBuildKnown = false;
+        this.incumbentWait = null;
         this.lastConnectionWarning = null;
         this.setConnectionState({ status: "connected" });
       },
       onWarning: (message, brokerGeneration) => {
-        if (isConnectionCurrent(brokerGeneration)) this.warnUnavailable(message);
+        if (!isConnectionCurrent(brokerGeneration)) return;
+        // Health-only payload polls retain the actionable notice without repeating it in the
+        // console or suggesting that a build upgrade will fix review-size limits.
+        if (
+          this.incumbentWait?.kind === "payload" &&
+          (message === HUNK_DAEMON_REGISTRATION_REJECTED_MESSAGE ||
+            message === HUNK_DAEMON_UPGRADE_WAIT_MESSAGE)
+        )
+          return;
+        this.warnUnavailable(message);
       },
       onDefect: this.timing.onDefect,
     });
