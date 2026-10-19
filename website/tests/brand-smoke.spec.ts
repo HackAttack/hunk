@@ -31,8 +31,11 @@ test("brand page is discoverable and offers working logo downloads", async ({ pa
           expect(body.readUInt32BE(16)).toBe(2048);
         } else if (format === "pdf") {
           expect(body.subarray(0, 5).toString()).toBe("%PDF-");
+          // SVG masks export as embedded bitmaps; logo PDFs must stay pure vector.
+          expect(body.toString("latin1")).not.toContain("/Subtype /Image");
         } else {
           expect(body.toString()).toContain(color.value);
+          expect(body.toString()).not.toContain("<mask");
         }
       }
     }

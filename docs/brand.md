@@ -23,7 +23,9 @@ cd website
 bun run generate:brand
 ```
 
-The generator recolors only visible ink, preserving SVG masks. Downloads are static files;
+Every logo is plain filled paths with no masks or strokes, so the PDF exports stay pure vector
+(SVG masks export as embedded bitmaps). The generator recolors the ink fill and pins PDF dates,
+so unchanged logos regenerate byte-for-byte. Downloads are static files;
 the website build does not require the export tools.
 
 ## Logo versions

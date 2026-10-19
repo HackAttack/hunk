@@ -11,7 +11,9 @@ await mkdir(downloads, { recursive: true });
 
 /** Runs an export tool and fails rather than leaving silently missing downloads. */
 async function run(command: string[], cwd = brandDir): Promise<void> {
-  const result = Bun.spawn(command, { cwd, stdout: "inherit", stderr: "inherit" });
+  // A fixed epoch keeps PDF creation dates stable, so unchanged logos regenerate byte-for-byte.
+  const env = { ...process.env, SOURCE_DATE_EPOCH: "0" };
+  const result = Bun.spawn(command, { cwd, env, stdout: "inherit", stderr: "inherit" });
   if ((await result.exited) !== 0) throw new Error(`Failed: ${command.join(" ")}`);
 }
 
@@ -21,7 +23,7 @@ for (const logo of brandLogos) {
   for (const color of brandColors) {
     const svgPath = join(publicDir, brandDownloadPath(logo.id, color.id, "svg").slice(1));
     if (color.id !== "ink") {
-      // Leave black/white mask geometry intact; only recolor the visible ink.
+      // Logos are plain filled paths, so recoloring the ink fill recolors the whole mark.
       await writeFile(svgPath, source.replaceAll("#16140f", color.value));
     }
     files.push(svgPath);

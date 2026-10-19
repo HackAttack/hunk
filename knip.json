@@ -11,6 +11,8 @@
         "test/session-broker-node/*.ts",
         "test/session-broker-runtime/*.ts",
         "scripts/launch-video/*.{ts,mjs}",
+        "scripts/launch-video/promo/*.mjs",
+        "scripts/launch-video/promo/storyboards/*.mjs",
         "scripts/dev/probe-terminal-theme.ts",
         "scripts/dev/test-large-untracked-render.tsx",
         "examples/extensions/**/index.{ts,tsx}",
@@ -25,7 +27,12 @@
       ],
       "ignore": ["examples/extensions/**/fixtures/**"],
       "ignoreBinaries": ["nix"],
-      "ignoreDependencies": ["@changesets/changelog-github", "@shikijs/themes", "playwright"],
+      "ignoreDependencies": [
+        "@changesets/changelog-github",
+        "@shikijs/themes",
+        "playwright",
+        "@fontsource-variable/jetbrains-mono"
+      ],
       "ignoreExportsUsedInFile": true
     },
     "packages/hunk": {
@@ -63,9 +70,10 @@
       "project": ["src/**/*.ts"]
     },
     "packages/term-video": {
-      "entry": ["src/plan.test.ts"],
+      "entry": ["src/plan.test.ts", "src/timeline.test.ts"],
       "project": ["src/**/*.{ts,mts,mjs}"],
-      "ignoreDependencies": ["playwright-core"]
+      "ignoreDependencies": ["playwright-core"],
+      "ignoreBinaries": ["ffmpeg"]
     }
   },
   "ignoreIssues": {
