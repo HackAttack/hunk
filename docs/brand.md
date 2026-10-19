@@ -8,6 +8,24 @@ Where Hunk's logo files live, which version to use where, and the colors and typ
 - Plain, concrete copy. Tagline: **Made for review.** Eyebrow: **Terminal diffs.** Domain: `hunk.dev`.
 - The wordmark is always lowercase and monospace: `hunk`. That applies to the logo and to the header text next to the mark. Running prose, docs, and release notes keep their existing style (`Hunk` as the product name); this rule is about the logo, not copy.
 
+## Public downloads
+
+The public brand page at [hunk.dev/brand/](https://hunk.dev/brand/) offers all four logos in
+ink and paper colors as SVG, transparent 2048px-wide PNG, and vector PDF, plus a ZIP bundle.
+The website footer links to it.
+
+The ink SVGs below remain the canonical sources. Regenerate the committed exports in
+`website/public/brand/downloads/` and `website/public/brand/hunk-brand.zip` after editing them:
+
+```bash
+# Requires rsvg-convert (librsvg) and zip on PATH.
+cd website
+bun run generate:brand
+```
+
+The generator recolors only visible ink, preserving SVG masks. Downloads are static files;
+the website build does not require the export tools.
+
 ## Logo versions
 
 All files are in `website/public/brand/` and served at `https://hunk.dev/brand/<file>`. They are filled with the ink color `#16140f`; recolor by editing the `fill`, or inline the SVG and use `currentColor`.
